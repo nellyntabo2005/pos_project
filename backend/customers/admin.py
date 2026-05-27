@@ -16,7 +16,6 @@ class CustomerAdmin(admin.ModelAdmin):
         'name',
         'phone',
         'email',
-        'loyalty_points',
         'total_spent',
         'pricing_tier',
         'is_active',

@@ -1,4 +1,4 @@
-<<<<<<< HEAD
+
 # returns/views.py
 from rest_framework import viewsets, status
 from rest_framework.decorators import action
@@ -164,7 +164,7 @@ class ReturnImageViewSet(viewsets.ReadOnlyModelViewSet):
     
     #filter_backends = [DjangoFilterBackend]
     #filterset_fields = ['return_obj', 'action']
-=======
+
 # Create your views here.
 from rest_framework import viewsets
 from .models import Return
@@ -187,4 +187,3 @@ class ReturnViewSet(viewsets.ModelViewSet):
         send_notification(
           request.user,  f"💰 Refund processed for return #{returned_product.id}"
         )
->>>>>>> 8c05e676f9e5f713ad213e0a46b3f92e73af6c4d

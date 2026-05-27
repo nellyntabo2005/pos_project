@@ -5,15 +5,7 @@ from django.core.exceptions import ValidationError
 from .models import User
 
 class UserSerializer(serializers.ModelSerializer):
-<<<<<<< HEAD
-    """
-    Main serializer for User model.
-    Handles data validation, creation, and updates.
-    """
-=======
-#Main serializer for User model.Handles data validation, creation, and updates.
-  
->>>>>>> 8c05e676f9e5f713ad213e0a46b3f92e73af6c4d
+
     
     # Read-only fields
     uuid = serializers.UUIDField(read_only=True)
@@ -69,7 +61,7 @@ class UserSerializer(serializers.ModelSerializer):
         }
     
     def get_full_name(self, obj):
-<<<<<<< HEAD
+
         """Return user's full name"""
         return obj.get_full_name() or obj.username
     
@@ -79,7 +71,6 @@ class UserSerializer(serializers.ModelSerializer):
     
     def validate_username(self, value):
         """Validate username is unique"""
-=======
         #Return user's full name
         return obj.get_full_name() or obj.username
     
@@ -89,42 +80,40 @@ class UserSerializer(serializers.ModelSerializer):
     
     def validate_username(self, value):
         #Validate username is unique
->>>>>>> 8c05e676f9e5f713ad213e0a46b3f92e73af6c4d
         instance = self.instance
         if User.objects.exclude(pk=instance.pk if instance else None).filter(username=value).exists():
             raise serializers.ValidationError("A user with this username already exists.")
         return value
     
     def validate_email(self, value):
-<<<<<<< HEAD
+
         """Validate email is unique"""
-=======
+
         #Validate email is unique
->>>>>>> 8c05e676f9e5f713ad213e0a46b3f92e73af6c4d
+
         instance = self.instance
         if User.objects.exclude(pk=instance.pk if instance else None).filter(email=value).exists():
             raise serializers.ValidationError("A user with this email already exists.")
         return value
     
     def validate_phone(self, value):
-<<<<<<< HEAD
+
         """Validate phone is unique"""
-=======
+
         #Validate phone is unique
->>>>>>> 8c05e676f9e5f713ad213e0a46b3f92e73af6c4d
+
         instance = self.instance
         if User.objects.exclude(pk=instance.pk if instance else None).filter(phone=value).exists():
             raise serializers.ValidationError("A user with this phone already exists.")
         return value
     
-<<<<<<< HEAD
+
     def validate(self, data):
         """Cross-field validation"""
-=======
     #Cross-field validation
     def validate(self, data):
         
->>>>>>> 8c05e676f9e5f713ad213e0a46b3f92e73af6c4d
+
         # Check passwords match
         if 'password' in data and 'confirm_password' in data:
             if data['password'] != data['confirm_password']:
@@ -137,11 +126,10 @@ class UserSerializer(serializers.ModelSerializer):
         return data
     
     def create(self, validated_data):
-<<<<<<< HEAD
+
         """Create new user with encrypted password"""
-=======
+
         #Create new user with encrypted password
->>>>>>> 8c05e676f9e5f713ad213e0a46b3f92e73af6c4d
         password = validated_data.pop('password', None)
         user = User(**validated_data)
         if password:
@@ -150,11 +138,10 @@ class UserSerializer(serializers.ModelSerializer):
         return user
     
     def update(self, instance, validated_data):
-<<<<<<< HEAD
+
         """Update user with optional password change"""
-=======
         #Update user with optional password change
->>>>>>> 8c05e676f9e5f713ad213e0a46b3f92e73af6c4d
+
         password = validated_data.pop('password', None)
         for attr, value in validated_data.items():
             setattr(instance, attr, value)
@@ -165,27 +152,22 @@ class UserSerializer(serializers.ModelSerializer):
 
 
 class UserLoginSerializer(serializers.Serializer):
-<<<<<<< HEAD
+
     """
     Serializer for user login.
     """
-=======
+
     #Serializer for user login.
     
->>>>>>> 8c05e676f9e5f713ad213e0a46b3f92e73af6c4d
     username = serializers.CharField(required=True)
     password = serializers.CharField(required=True, write_only=True)
 
 
 class UserChangePasswordSerializer(serializers.Serializer):
-<<<<<<< HEAD
+
     """
     Serializer for password change.
     """
-=======
-    #Serializer for password change.
-  
->>>>>>> 8c05e676f9e5f713ad213e0a46b3f92e73af6c4d
     old_password = serializers.CharField(required=True, write_only=True)
     new_password = serializers.CharField(required=True, write_only=True, validators=[validate_password])
     confirm_password = serializers.CharField(required=True, write_only=True)
@@ -197,15 +179,12 @@ class UserChangePasswordSerializer(serializers.Serializer):
 
 
 class UserRoleUpdateSerializer(serializers.ModelSerializer):
-<<<<<<< HEAD
-    """
-    Simplified serializer for updating user role only.
-    """
-=======
+
+
     #Simplified serializer for updating user role only.
 
->>>>>>> 8c05e676f9e5f713ad213e0a46b3f92e73af6c4d
-    class Meta:
+
+ class Meta:
         model = User
         fields = ['id', 'username', 'role', 'is_active']
         read_only_fields = ['id', 'username']

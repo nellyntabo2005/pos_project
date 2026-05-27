@@ -1,4 +1,4 @@
-<<<<<<< HEAD
+
 # reports/admin.py
 from django.contrib import admin
 from .models import SavedReport, ReportExport
@@ -18,8 +18,8 @@ class ReportExportAdmin(admin.ModelAdmin):
     list_filter = ['status', 'report_type', 'file_format', 'created_at']
     search_fields = ['export_id']
     readonly_fields = ['created_at']
-=======
+
 from django.contrib import admin
 
 # Register your models here.
->>>>>>> 8c05e676f9e5f713ad213e0a46b3f92e73af6c4d
+

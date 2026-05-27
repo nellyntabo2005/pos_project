@@ -9,27 +9,20 @@ https://docs.djangoproject.com/en/6.0/topics/settings/
 For the full list of settings and their values, see
 https://docs.djangoproject.com/en/6.0/ref/settings/
 """
+
 from pathlib import Path
-<<<<<<< HEAD
 from datetime import timedelta
 import os
-=======
+
 from decouple import config, Csv
+
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 
-# Load environment variables from backend/.env
-import os
+# Load environment variables from backend/.env (optional)
 if os.path.exists(os.path.join(BASE_DIR, '.env')):
     from dotenv import load_dotenv
     load_dotenv(os.path.join(BASE_DIR, '.env'))
-
-
->>>>>>> 8c05e676f9e5f713ad213e0a46b3f92e73af6c4d
-
-# Build paths inside the project like this: BASE_DIR / 'subdir'.
-# (BASE_DIR already defined above)
-
 
 
 # SECURITY WARNING: keep the secret key used in production secret!
@@ -44,25 +37,20 @@ ALLOWED_HOSTS = ['*']
 # Application definition
 
 INSTALLED_APPS = [
-<<<<<<< HEAD
-=======
-    'daphne',
->>>>>>> 8c05e676f9e5f713ad213e0a46b3f92e73af6c4d
     'django.contrib.admin',
     'django.contrib.auth',
     'django.contrib.contenttypes',
     'django.contrib.sessions',
     'django.contrib.messages',
     'django.contrib.staticfiles',
-<<<<<<< HEAD
-    
+
     # Third party apps
     'rest_framework',
     'rest_framework_simplejwt',
     'corsheaders',
     'django_filters',
-    
-    # Custom apps - YOUR APPS
+
+    # Custom apps
     'customers',
     'users',
     'products',
@@ -72,19 +60,9 @@ INSTALLED_APPS = [
     'reports',
     'notifications',
     'inventory',
-=======
-    'rest_framework',
 
-    'users.apps.UsersConfig',
-    'customers.apps.CustomersConfig',
-    'products.apps.ProductsConfig',
-    'sales.apps.SalesConfig',
-    'payments.apps.PaymentsConfig',
-    'returns.apps.ReturnsConfig',
-    'reports.apps.ReportsConfig',
+    # Channels
     'channels',
-    'notifications.apps.NotificationsConfig',
->>>>>>> 8c05e676f9e5f713ad213e0a46b3f92e73af6c4d
 ]
 
 MIDDLEWARE = [
@@ -117,62 +95,20 @@ TEMPLATES = [
 ]
 
 WSGI_APPLICATION = 'erp_sales.wsgi.application'
-
-ASGI_APPLICATION = "erp_sales.asgi.application"
-
-<<<<<<< HEAD
-# ============================================================
-# MYSQL DATABASE CONFIGURATION
-# ============================================================
-=======
+ASGI_APPLICATION = 'erp_sales.asgi.application'
 
 
-CHANNEL_LAYERS = {
-    "default": {
-        "BACKEND": "channels_redis.core.RedisChannelLayer",
-        "CONFIG": {
-            "hosts": [("127.0.0.1", 6379)],
-        },
-    },
-}
 # Database
-# https://docs.djangoproject.com/en/6.0/ref/settings/#databases
->>>>>>> 8c05e676f9e5f713ad213e0a46b3f92e73af6c4d
-
 DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.mysql',
-<<<<<<< HEAD
-        'NAME': 'erp_database',           # Your database name
-        'USER': 'erpuser',                # Your MySQL username  
-        'PASSWORD': 'erp_pass',          # Your MySQL password (leave empty if no password)
-        'HOST': 'localhost',               # Or 127.0.0.1
-        'PORT': '3306',                    # Default MySQL port
-        'OPTIONS': {
-            'init_command': "SET sql_mode='STRICT_TRANS_TABLES'",
-            'charset': 'utf8mb4',
-        },
-=======
-        'NAME': 'sales_db',
+        'NAME': 'pos_db',
         'USER': 'root',
-        'PASSWORD': '@Kar1ng3',
+        'PASSWORD': 'Bonareri123',
         'HOST': '127.0.0.1',
         'PORT': '3306',
->>>>>>> 8c05e676f9e5f713ad213e0a46b3f92e73af6c4d
     }
 }
-
-# If you have a different MySQL setup, use this template:
-# DATABASES = {
-#     'default': {
-#         'ENGINE': 'django.db.backends.mysql',
-#         'NAME': 'your_database_name',
-#         'USER': 'your_username',
-#         'PASSWORD': 'your_password',
-#         'HOST': 'localhost',
-#         'PORT': '3306',
-#     }
-# }
 
 
 # Password validation
@@ -194,7 +130,7 @@ AUTH_PASSWORD_VALIDATORS = [
 
 # Internationalization
 LANGUAGE_CODE = 'en-us'
-TIME_ZONE = 'Africa/Nairobi'  # Kenyan time zone
+TIME_ZONE = 'Africa/Nairobi'
 USE_I18N = True
 USE_TZ = True
 
@@ -202,18 +138,19 @@ USE_TZ = True
 # Static files (CSS, JavaScript, Images)
 STATIC_URL = 'static/'
 STATIC_ROOT = BASE_DIR / 'staticfiles'
+
 STATICFILES_DIRS = [
     BASE_DIR / 'static',
 ]
 
-if os.path.exists(BASE_DIR / 'static'):
-    STATICFILES_DIRS = [BASE_DIR / 'static']
-else:
+if not (BASE_DIR / 'static').exists():
     STATICFILES_DIRS = []
 
-# Media files (User uploaded files - product images, receipts)
+
+# Media files (User uploaded files)
 MEDIA_URL = '/media/'
 MEDIA_ROOT = BASE_DIR / 'media'
+
 
 # Default primary key field type
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
@@ -222,31 +159,7 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 AUTH_USER_MODEL = 'users.User'
 
 
-# ============================================================
 # REST FRAMEWORK SETTINGS
-# ============================================================
-
-<<<<<<< HEAD
-=======
-# M-Pesa Daraja Configuration
-DARAJA_ENVIRONMENT = config('DARAJA_ENVIRONMENT', default='sandbox')
-MPESA_CONSUMER_KEY = config('MPESA_CONSUMER_KEY', default='')
-MPESA_CONSUMER_SECRET = config('MPESA_CONSUMER_SECRET', default='')
-MPESA_EXPRESS_SHORTCODE = config('MPESA_EXPRESS_SHORTCODE', default='174379')
-MPESA_PASSKEY = config('MPESA_PASSKEY', default='')
-MPESA_CALLBACK_URL = config('MPESA_CALLBACK_URL', default='https://yourdomain.com/api/payments/mpesa-callback/')
-
-# REST Framework Configuration
-REST_FRAMEWORK = {
-    'DEFAULT_AUTHENTICATION_CLASSES': (
-        'rest_framework_simplejwt.authentication.JWTAuthentication',
-    ),
-    'DEFAULT_PAGINATION_CLASS': 'rest_framework.pagination.PageNumberPagination',
-    'PAGE_SIZE': 100
-}
-
-#JWT authentication
->>>>>>> 8c05e676f9e5f713ad213e0a46b3f92e73af6c4d
 REST_FRAMEWORK = {
     'DEFAULT_AUTHENTICATION_CLASSES': (
         'rest_framework_simplejwt.authentication.JWTAuthentication',
@@ -265,10 +178,7 @@ REST_FRAMEWORK = {
 }
 
 
-# ============================================================
 # JWT AUTHENTICATION SETTINGS
-# ============================================================
-
 SIMPLE_JWT = {
     'ACCESS_TOKEN_LIFETIME': timedelta(hours=8),
     'REFRESH_TOKEN_LIFETIME': timedelta(days=7),
@@ -285,51 +195,48 @@ SIMPLE_JWT = {
 }
 
 
-# ============================================================
-# CORS SETTINGS (for frontend connection)
-# ============================================================
-
-CORS_ALLOW_ALL_ORIGINS = True  # Allow all origins during development
+# CORS
+CORS_ALLOW_ALL_ORIGINS = True
 CORS_ALLOW_CREDENTIALS = True
 CORS_ALLOWED_ORIGINS = [
-    "http://localhost:3000",   # React
-    "http://localhost:5173",   # Vite
-    "http://127.0.0.1:8000",
+    'http://localhost:3000',
+    'http://localhost:5173',
+    'http://127.0.0.1:8000',
 ]
 
 
-# ============================================================
-# EMAIL CONFIGURATION (for notifications)
-# ============================================================
+# Channels
+CHANNEL_LAYERS = {
+    'default': {
+        'BACKEND': 'channels_redis.core.RedisChannelLayer',
+        'CONFIG': {
+            'hosts': [('127.0.0.1', 6379)],
+        },
+    },
+}
 
-# For development - prints emails to console (no actual sending)
+
+# EMAIL
 EMAIL_BACKEND = 'django.core.mail.backends.console.EmailBackend'
 
-# For production with Gmail (uncomment and comment the above)
-# EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
-# EMAIL_HOST = 'smtp.gmail.com'
-# EMAIL_PORT = 587
-# EMAIL_USE_TLS = True
-# EMAIL_HOST_USER = 'your-email@gmail.com'
-# EMAIL_HOST_PASSWORD = 'your-app-password'
-# DEFAULT_FROM_EMAIL = 'ERP System <noreply@yourstore.com>'
 
-
-# ============================================================
-# M-PESA CONFIGURATION (add your credentials)
-# ============================================================
-
+# M-PESA
 MPESA_CONSUMER_KEY = ''
 MPESA_CONSUMER_SECRET = ''
 MPESA_PASSKEY = ''
-MPESA_SHORTCODE = '174379'  # Sandbox default
-MPESA_ENVIRONMENT = 'sandbox'  # sandbox or production
+MPESA_SHORTCODE = '174379'
+MPESA_ENVIRONMENT = 'sandbox'
+
+# Optional decouple-based config
+DARAJA_ENVIRONMENT = config('DARAJA_ENVIRONMENT', default='sandbox')
+MPESA_EXPRESS_SHORTCODE = config('MPESA_EXPRESS_SHORTCODE', default='174379')
+MPESA_CALLBACK_URL = config('MPESA_CALLBACK_URL', default='https://yourdomain.com/api/payments/mpesa-callback/')
+MPESA_CONSUMER_KEY = config('MPESA_CONSUMER_KEY', default=MPESA_CONSUMER_KEY)
+MPESA_CONSUMER_SECRET = config('MPESA_CONSUMER_SECRET', default=MPESA_CONSUMER_SECRET)
+MPESA_PASSKEY = config('MPESA_PASSKEY', default=MPESA_PASSKEY)
 
 
-# ============================================================
-# LOGGING CONFIGURATION
-# ============================================================
-
+# LOGGING
 LOGGING = {
     'version': 1,
     'disable_existing_loggers': False,
@@ -375,3 +282,4 @@ LOGGING = {
 # Create logs directory if it doesn't exist
 if not os.path.exists(BASE_DIR / 'logs'):
     os.makedirs(BASE_DIR / 'logs')
+

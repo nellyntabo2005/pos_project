@@ -124,18 +124,15 @@ class MpesaTransactionSerializer(serializers.ModelSerializer):
 
 
 class MpesaStkPushSerializer(serializers.Serializer):
-<<<<<<< HEAD
-    """Serializer for initiating STK Push"""
-=======
     #Serializer for initiating STK Push
->>>>>>> 8c05e676f9e5f713ad213e0a46b3f92e73af6c4d
-    phone_number = serializers.CharField(max_length=15)
-    amount = serializers.DecimalField(max_digits=12, decimal_places=2, min_value=1)
-    account_reference = serializers.CharField(max_length=50)
-    transaction_desc = serializers.CharField(max_length=100, required=False, default="Payment for goods")
-    sale_id = serializers.IntegerField(required=False)
+
+ phone_number = serializers.CharField(max_length=15)
+ amount = serializers.DecimalField(max_digits=12, decimal_places=2, min_value=1)
+ account_reference = serializers.CharField(max_length=50)
+ transaction_desc = serializers.CharField(max_length=100, required=False, default="Payment for goods")
+ sale_id = serializers.IntegerField(required=False)
     
-    def validate_phone_number(self, value):
+def validate_phone_number(self, value):
         import re
         phone = re.sub(r'\D', '', value)
         
@@ -154,16 +151,11 @@ class MpesaStkPushSerializer(serializers.Serializer):
 
 
 class MpesaQueryStatusSerializer(serializers.Serializer):
-<<<<<<< HEAD
-    """Serializer for querying transaction status"""
-=======
-    #Serializer for querying transaction status
->>>>>>> 8c05e676f9e5f713ad213e0a46b3f92e73af6c4d
-    checkout_request_id = serializers.CharField(max_length=100)
+ checkout_request_id = serializers.CharField(max_length=100)
 
 
 class ExpenseCategorySerializer(serializers.ModelSerializer):
-    class Meta:
+     class Meta:
         model = ExpenseCategory
         fields = ['id', 'name', 'description', 'parent', 'is_active', 'created_at']
         read_only_fields = ['id', 'created_at']

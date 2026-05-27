@@ -1,4 +1,4 @@
-<<<<<<< HEAD
+
 # notifications/admin.py
 from django.contrib import admin
 from django.utils.html import format_html
@@ -70,8 +70,8 @@ class NotificationLogAdmin(admin.ModelAdmin):
     list_display = ['notification', 'attempt_number', 'success', 'created_at']
     list_filter = ['success', 'created_at']
     readonly_fields = ['notification', 'attempt_number', 'channel_response', 'error_details', 'success', 'created_at']
-=======
+
 from django.contrib import admin
 
 # Register your models here.
->>>>>>> 8c05e676f9e5f713ad213e0a46b3f92e73af6c4d
+

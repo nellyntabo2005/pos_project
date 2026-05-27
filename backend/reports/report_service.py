@@ -132,8 +132,8 @@ class ReportService:
             ).values('week').annotate(
                 total=Sum('total'),
                 count=Count('id'),
-                start_date=Min('sale_date'),
-                end_date=Max('sale_date')
+                start_date=min('sale_date'),
+                end_date=max('sale_date')
             ).order_by('week')
             
             report['breakdown'] = [

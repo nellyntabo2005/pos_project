@@ -1,4 +1,4 @@
-<<<<<<< HEAD
+
 # reports/models.py
 from django.db import models
 from django.conf import settings
@@ -36,8 +36,8 @@ class ReportExport(models.Model):
     
     def __str__(self):
         return f"{self.export_id} - {self.status}"
-=======
+
 from django.db import models
 
 # Create your models here.
->>>>>>> 8c05e676f9e5f713ad213e0a46b3f92e73af6c4d
+

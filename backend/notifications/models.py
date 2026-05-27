@@ -1,4 +1,4 @@
-<<<<<<< HEAD
+
 # notifications/models.py
 from django.db import models
 from django.core.validators import MinValueValidator, MaxValueValidator
@@ -334,8 +334,6 @@ class NotificationLog(models.Model):
     
     def __str__(self):
         return f"Attempt {self.attempt_number} for {self.notification.notification_id} - {'Success' if self.success else 'Failed'}"
-=======
-from django.db import models
 
-# Create your models here.
->>>>>>> 8c05e676f9e5f713ad213e0a46b3f92e73af6c4d
+        from django.db import models
+

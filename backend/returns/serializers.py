@@ -1,6 +1,5 @@
 # returns/serializers.py
 from rest_framework import serializers
-<<<<<<< HEAD
 from decimal import Decimal
 from django.db import transaction
 
@@ -10,41 +9,36 @@ from sales.serializers import SaleSerializer, SaleItemSerializer
 from customers.serializers import CustomerSerializer
 from users.serializers import UserSerializer
 
-=======
 from .models import Return, ReturnItem
 from products.serializers import ProductSerializer
 from sales.serializers import SaleSerializer
->>>>>>> 8c05e676f9e5f713ad213e0a46b3f92e73af6c4d
+
 
 class ReturnItemSerializer(serializers.ModelSerializer):
     product_name = serializers.SerializerMethodField()
     product_sku = serializers.SerializerMethodField()
-<<<<<<< HEAD
+
     original_price = serializers.SerializerMethodField()
-=======
->>>>>>> 8c05e676f9e5f713ad213e0a46b3f92e73af6c4d
+
     
     class Meta:
         model = ReturnItem
         fields = [
-<<<<<<< HEAD
+
             'id', 'product', 'product_name', 'product_sku', 'original_sale_item',
             'quantity', 'refund_amount', 'item_reason', 'condition', 'restock',
             'original_price', 'created_at'
         ]
-        read_only_fields = ['id', 'created_at']
-=======
-            'id', 'product', 'product_name', 'product_sku',
-            'quantity', 'refund_amount', 'reason', 'condition'
+        read_only_fields = ['id', 'created_at'] [
+
+               'id', 'product', 'product_name', 'product_sku',
+               'quantity', 'refund_amount', 'reason', 'condition'
         ]
->>>>>>> 8c05e676f9e5f713ad213e0a46b3f92e73af6c4d
-    
     def get_product_name(self, obj):
         return obj.product.name
     
     def get_product_sku(self, obj):
         return obj.product.sku
-<<<<<<< HEAD
     
     def get_original_price(self, obj):
         return obj.original_sale_item.unit_price if obj.original_sale_item else 0
@@ -72,13 +66,12 @@ class ReturnLogSerializer(serializers.ModelSerializer):
     
     def get_performed_by_name(self, obj):
         return obj.performed_by.get_full_name() or obj.performed_by.username
-=======
->>>>>>> 8c05e676f9e5f713ad213e0a46b3f92e73af6c4d
+
 
 
 class ReturnSerializer(serializers.ModelSerializer):
     items = ReturnItemSerializer(many=True, read_only=True)
-<<<<<<< HEAD
+
     images = ReturnImageSerializer(many=True, read_only=True)
     logs = ReturnLogSerializer(many=True, read_only=True)
     
@@ -99,20 +92,19 @@ class ReturnSerializer(serializers.ModelSerializer):
         child=serializers.DictField(),
         help_text="List of items being returned"
     )
-=======
+
     original_sale_details = SaleSerializer(source='original_sale', read_only=True)
     customer_name = serializers.SerializerMethodField()
     requested_by_name = serializers.SerializerMethodField()
     
     # Write-only for creating
     return_items = serializers.ListField(write_only=True, required=False)
->>>>>>> 8c05e676f9e5f713ad213e0a46b3f92e73af6c4d
-    
+
     class Meta:
         model = Return
         fields = [
             'id', 'return_number', 'uuid', 'original_sale', 'original_sale_details',
-<<<<<<< HEAD
+
             'customer', 'customer_details', 'customer_name',
             'reason', 'reason_description', 'status',
             'refund_amount', 'restocking_fee', 'shipping_refund', 'net_refund',
@@ -133,7 +125,7 @@ class ReturnSerializer(serializers.ModelSerializer):
             'id', 'return_number', 'uuid', 'return_date', 'approved_at',
             'processed_at', 'updated_at', 'net_refund', 'total_items_returned',
             'days_since_return'
-=======
+
             'customer', 'customer_name', 'reason', 'reason_description',
             'status', 'refund_amount', 'restocking_fee', 'net_refund',
             'refund_method', 'restock', 'notes', 'staff_notes',
@@ -144,7 +136,6 @@ class ReturnSerializer(serializers.ModelSerializer):
         read_only_fields = [
             'id', 'return_number', 'uuid', 'return_date', 'approved_at',
             'processed_at', 'net_refund'
->>>>>>> 8c05e676f9e5f713ad213e0a46b3f92e73af6c4d
         ]
     
     def get_customer_name(self, obj):
@@ -153,7 +144,7 @@ class ReturnSerializer(serializers.ModelSerializer):
     def get_requested_by_name(self, obj):
         return obj.requested_by.get_full_name() or obj.requested_by.username
     
-<<<<<<< HEAD
+
     @transaction.atomic
     def create(self, validated_data):
         return_items_data = validated_data.pop('return_items')
@@ -202,8 +193,7 @@ class ReturnProcessSerializer(serializers.Serializer):
     bank_name = serializers.CharField(required=False, allow_blank=True)
     bank_account = serializers.CharField(required=False, allow_blank=True)
     notes = serializers.CharField(required=False, allow_blank=True)
-=======
-    def validate_refund_amount(self, value):
+def validate_refund_amount(self, value):
         #Ensure refund amount doesn't exceed sale total
         if self.instance and self.instance.original_sale:
             if value > self.instance.original_sale.total:
@@ -212,7 +202,7 @@ class ReturnProcessSerializer(serializers.Serializer):
                 )
         return value
     
-    def create(self, validated_data):
+def create(self, validated_data):
         return_items = validated_data.pop('return_items', [])
         return_obj = Return.objects.create(**validated_data)
         
@@ -220,4 +210,4 @@ class ReturnProcessSerializer(serializers.Serializer):
             ReturnItem.objects.create(return_obj=return_obj, **item)
         
         return return_obj
->>>>>>> 8c05e676f9e5f713ad213e0a46b3f92e73af6c4d
+

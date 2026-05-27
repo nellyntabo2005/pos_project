@@ -69,7 +69,7 @@ class Customer(models.Model):
     )
     
     # === LOYALTY SYSTEM ===
-    loyalty_points = models.IntegerField(
+    loyalty_records = models.IntegerField(
         default=0,
         validators=[MinValueValidator(0)],
         help_text="Accumulated loyalty points"
@@ -128,7 +128,6 @@ class Customer(models.Model):
         verbose_name_plural = "Customers"
     
     def __str__(self):
-<<<<<<< HEAD
         return f"{self.name} ({self.phone})"
     
     def save(self, *args, **kwargs):
@@ -151,6 +150,7 @@ class Customer(models.Model):
         self.save(update_fields=['loyalty_points', 'updated_at'])
     
     def redeem_loyalty_points(self, points):
+
         """Redeem loyalty points for discount"""
         if points > self.loyalty_points:
             raise ValidationError("Insufficient loyalty points")
@@ -185,7 +185,6 @@ class Customer(models.Model):
         """Return formatted full address"""
         parts = [self.address_line1, self.address_line2, self.city, self.county]
         return ", ".join([p for p in parts if p])
-=======
         return self.name
 
 class loyalty_points(models.Model):
@@ -201,4 +200,3 @@ class loyalty_points(models.Model):
     def __str__(self):
         return f"{self.customer.name} - {self.points} points"
     
->>>>>>> 8c05e676f9e5f713ad213e0a46b3f92e73af6c4d
