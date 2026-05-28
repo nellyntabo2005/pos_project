@@ -1,4 +1,4 @@
-<<<<<<< HEAD
+
 # notifications/views.py
 from rest_framework import viewsets, status
 from rest_framework.decorators import action
@@ -210,8 +210,8 @@ class NotificationViewSet(viewsets.ReadOnlyModelViewSet):
                 'error': 'Failed to send notification',
                 'error_message': notification.error_message
             }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-=======
+
 from django.shortcuts import render
 
 # Create your views here.
->>>>>>> 8c05e676f9e5f713ad213e0a46b3f92e73af6c4d
+

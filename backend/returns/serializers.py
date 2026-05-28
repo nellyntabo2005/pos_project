@@ -29,11 +29,11 @@ class ReturnItemSerializer(serializers.ModelSerializer):
             'quantity', 'refund_amount', 'item_reason', 'condition', 'restock',
             'original_price', 'created_at'
         ]
-        read_only_fields = ['id', 'created_at'] [
+        read_only_fields = ['id', 'created_at'] 
 
-               'id', 'product', 'product_name', 'product_sku',
-               'quantity', 'refund_amount', 'reason', 'condition'
-        ]
+        'id', 'product', 'product_name', 'product_sku',
+        'quantity', 'refund_amount', 'reason', 'condition'
+        
     def get_product_name(self, obj):
         return obj.product.name
     
