@@ -83,7 +83,7 @@ class StockMovement(models.Model):
         ('production', 'Production'),
         ('sample', 'Sample/Tester'),
         ('donation', 'Donation/Write-off'),
-    ]
+    ] #this will be monitored by the inventory clerk
     
     movement_id = models.CharField(max_length=50, unique=True, editable=False, db_index=True)
     uuid = models.UUIDField(default=uuid.uuid4, editable=False, unique=True)

@@ -59,6 +59,7 @@ INSTALLED_APPS = [
     'payments',
     'reports',
     'notifications',
+
     'inventory',
 
     # Channels
@@ -221,9 +222,9 @@ EMAIL_BACKEND = 'django.core.mail.backends.console.EmailBackend'
 
 
 # M-PESA
-MPESA_CONSUMER_KEY = ''
-MPESA_CONSUMER_SECRET = ''
-MPESA_PASSKEY = ''
+MPESA_CONSUMER_KEY = '7EQf25u1ARJ1UYKHTUlb88eJUcYreiy0glUjfG95wjhNbHi8'
+MPESA_CONSUMER_SECRET = 'QRXIhxfz0ZIVd6IpAjZIvXf2fWEKLbKNCTtG6p5awrilexSRXTFXWLsYIU5tJJFf'
+MPESA_PASSKEY = 'bfb279f9aa9bdbcf158e97dd71a467cd2e0c893059b10f78e6b72ada1ed2c919'
 MPESA_SHORTCODE = '174379'
 MPESA_ENVIRONMENT = 'sandbox'
 
