@@ -1,25 +1,30 @@
-# products/views.py
-from rest_framework import viewsets, status
+from rest_framework import viewsets
 from rest_framework.decorators import action
-from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
+from rest_framework.response import Response
 from rest_framework.filters import SearchFilter, OrderingFilter
 from django_filters.rest_framework import DjangoFilterBackend
-from django.db.models import Q, Sum, F
-from django.http import HttpResponse
-from decimal import Decimal
+from django.db.models import F
+
 import pandas as pd
 import io
+from decimal import Decimal
+from django.http import HttpResponse
 
-from .models import Category, Supplier, Product, ProductImage
+from .models import Category, Product, ProductImage
+from inventory.models import Supplier
+
 from .serializers import (
-    CategorySerializer, SupplierSerializer, ProductSerializer,
-    ProductImageSerializer
+    CategorySerializer,
+    SupplierSerializer,
+    ProductSerializer,
+    ProductImageSerializer,
 )
 
 
 class CategoryViewSet(viewsets.ModelViewSet):
     """ViewSet for Categories"""
+
     queryset = Category.objects.all()
     serializer_class = CategorySerializer
     permission_classes = [IsAuthenticated]
@@ -30,6 +35,7 @@ class CategoryViewSet(viewsets.ModelViewSet):
 
 class SupplierViewSet(viewsets.ModelViewSet):
     """ViewSet for Suppliers"""
+
     queryset = Supplier.objects.all()
     serializer_class = SupplierSerializer
     permission_classes = [IsAuthenticated]
@@ -40,6 +46,7 @@ class SupplierViewSet(viewsets.ModelViewSet):
 
 class ProductViewSet(viewsets.ModelViewSet):
     """ViewSet for Products"""
+
     queryset = Product.objects.all()
     serializer_class = ProductSerializer
     permission_classes = [IsAuthenticated]
@@ -54,7 +61,7 @@ class ProductViewSet(viewsets.ModelViewSet):
         """Get low stock products"""
         low_stock = Product.objects.filter(
             is_active=True,
-            stock_quantity__lte=F('reorder_level')
+            stock_quantity__lte=F('reorder_level'),
         ).exclude(reorder_level=0)
         serializer = self.get_serializer(low_stock, many=True)
         return Response(serializer.data)
@@ -72,15 +79,32 @@ class ProductViewSet(viewsets.ModelViewSet):
         except Product.DoesNotExist:
             return Response({'error': 'Product not found'}, status=404)
 
+    @action(detail=False, methods=['get'], url_path='download-template')
+    def download_template(self, request):
+        """Return an Excel template for product bulk import."""
+        # Uses existing file in project root (backend/product_template.xlsx)
+        from pathlib import Path
+        template_path = Path(__file__).resolve().parent.parent / 'product_template.xlsx'
+        if not template_path.exists():
+            return Response({'error': 'Template file not found on server.'}, status=404)
+
+        with template_path.open('rb') as f:
+            response = HttpResponse(
+                f.read(),
+                content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+            )
+        response['Content-Disposition'] = 'attachment; filename="product_template.xlsx"'
+        return response
+
     @action(detail=False, methods=['post'], url_path='bulk-import')
     def bulk_import(self, request):
-        """Import products from Excel"""
+        """Import products from Excel (xlsx/xls) or CSV"""
         file = request.FILES.get('file')
         if not file:
             return Response({'error': 'File required'}, status=400)
 
         try:
-            if file.name.endswith('.csv'):
+            if file.name.lower().endswith('.csv'):
                 df = pd.read_csv(file)
             else:
                 df = pd.read_excel(file)
@@ -93,35 +117,36 @@ class ProductViewSet(viewsets.ModelViewSet):
                 try:
                     name = str(row.get('name', '')).strip()
                     if not name:
-                        errors.append(f"Row {idx+2}: Name required")
+                        errors.append(f"Row {idx + 2}: Name required")
                         continue
 
-                    # Get or create category
                     cat_name = str(row.get('category', '')).strip() if pd.notna(row.get('category')) else None
                     category = None
                     if cat_name:
                         category, _ = Category.objects.get_or_create(
                             name=cat_name,
-                            defaults={'slug': cat_name.lower().replace(' ', '-')}
+                            defaults={'slug': cat_name.lower().replace(' ', '-')},
                         )
 
-                    # Get or create supplier
                     sup_name = str(row.get('supplier', '')).strip() if pd.notna(row.get('supplier')) else None
                     supplier = None
                     if sup_name:
                         supplier, _ = Supplier.objects.get_or_create(
                             name=sup_name,
-                            defaults={'phone': '0000000000'}
+                            defaults={'phone': '0000000000'},
                         )
 
                     retail_price = Decimal(str(row.get('retail_price', 0)))
                     cost_price = Decimal(str(row.get('cost_price', 0)))
 
+                    sku = row.get('sku', '') if pd.notna(row.get('sku', '')) else None
+                    barcode = str(row.get('barcode', '')) if pd.notna(row.get('barcode')) else ''
+
                     product, is_new = Product.objects.update_or_create(
-                        sku=row.get('sku', '') if pd.notna(row.get('sku')) else None,
+                        sku=sku,
                         defaults={
                             'name': name,
-                            'barcode': str(row.get('barcode', '')) if pd.notna(row.get('barcode')) else '',
+                            'barcode': barcode,
                             'category': category,
                             'supplier': supplier,
                             'cost_price': cost_price,
@@ -131,20 +156,19 @@ class ProductViewSet(viewsets.ModelViewSet):
                             'unit': str(row.get('unit', 'piece')).lower(),
                             'tax_rate': int(row.get('tax_rate', 16)),
                             'is_active': True,
-                        }
+                        },
                     )
+
                     if is_new:
                         created += 1
                     else:
                         updated += 1
-                except Exception as e:
-                    errors.append(f"Row {idx+2}: {str(e)}")
 
-            return Response({
-                'created': created,
-                'updated': updated,
-                'errors': errors[:20]
-            })
+                except Exception as e:
+                    errors.append(f"Row {idx + 2}: {str(e)}")
+
+            return Response({'created': created, 'updated': updated, 'errors': errors[:20]})
+
         except Exception as e:
             return Response({'error': str(e)}, status=400)
 
@@ -162,17 +186,23 @@ class ProductViewSet(viewsets.ModelViewSet):
                 'Stock': float(p.stock_quantity),
                 'Unit': p.unit,
             })
+
         df = pd.DataFrame(data)
         output = io.BytesIO()
         df.to_excel(output, index=False)
         output.seek(0)
-        response = HttpResponse(output, content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+
+        response = HttpResponse(
+            output,
+            content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        )
         response['Content-Disposition'] = 'attachment; filename="products.xlsx"'
         return response
 
 
 class ProductImageViewSet(viewsets.ModelViewSet):
     """ViewSet for Product Images"""
+
     queryset = ProductImage.objects.all()
     serializer_class = ProductImageSerializer
     permission_classes = [IsAuthenticated]
@@ -182,3 +212,4 @@ class ProductImageViewSet(viewsets.ModelViewSet):
         if product_id:
             return ProductImage.objects.filter(product_id=product_id)
         return ProductImage.objects.all()
+

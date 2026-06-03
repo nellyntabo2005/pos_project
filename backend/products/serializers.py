@@ -1,7 +1,9 @@
 # products/serializers.py
 from rest_framework import serializers
 from decimal import Decimal
-from .models import Category, Supplier, Product, ProductImage
+from .models import Category, Product, ProductImage
+from inventory.models import Supplier
+
 
 
 class CategorySerializer(serializers.ModelSerializer):

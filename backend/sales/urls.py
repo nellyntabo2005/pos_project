@@ -1,3 +1,4 @@
+# sales/urls.py
 from django.urls import path, include
 from rest_framework.routers import DefaultRouter
 from .views import SaleViewSet, PaymentViewSet
@@ -7,5 +8,5 @@ router.register(r'', SaleViewSet, basename='sale')
 router.register(r'payments', PaymentViewSet, basename='payment')
 
 urlpatterns = [
-    path('', include(router.urls)),
+    path('', include(router.urls)),  
 ]

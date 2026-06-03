@@ -1,6 +1,19 @@
 # inventory/admin.py
 from django.contrib import admin
-from .models import Batch, StockMovement, PurchaseOrder, StockCount, StoreTransfer, InventoryAlert
+from django.utils.html import format_html
+from .models import (
+    Supplier, Batch, StockMovement, PurchaseOrder, PurchaseOrderItem,
+    StockCount, StockCountItem, StoreTransfer, StoreTransferItem,
+    StoreStock, InventoryAlert
+)
+
+
+@admin.register(Supplier)
+class SupplierAdmin(admin.ModelAdmin):
+    list_display = ['id', 'name', 'code', 'phone', 'email', 'is_active', 'is_preferred']
+    list_filter = ['is_active', 'is_preferred', 'city']
+    search_fields = ['name', 'code', 'phone', 'email']
+    readonly_fields = ['created_at', 'updated_at']
 
 
 @admin.register(Batch)
@@ -9,35 +22,62 @@ class BatchAdmin(admin.ModelAdmin):
     list_filter = ['status', 'product', 'location']
     search_fields = ['batch_number', 'product__name', 'product__sku']
     readonly_fields = ['created_at', 'updated_at']
+
+
+@admin.register(StockMovement)
+class StockMovementAdmin(admin.ModelAdmin):
+    list_display = ['movement_id', 'product', 'movement_type', 'quantity', 'movement_date']
+    list_filter = ['movement_type', 'location', 'movement_date']
+    search_fields = ['movement_id', 'reference_id', 'product__name']
+    readonly_fields = ['movement_id', 'uuid', 'movement_date', 'created_at']
+
+
+class PurchaseOrderItemInline(admin.TabularInline):
+    model = PurchaseOrderItem
+    extra = 0
+    readonly_fields = ['product', 'quantity', 'unit_cost', 'total']
+
+
+@admin.register(PurchaseOrder)
+class PurchaseOrderAdmin(admin.ModelAdmin):
+    list_display = ['po_number', 'supplier', 'order_date', 'expected_delivery_date', 'status', 'total']
+    list_filter = ['status', 'payment_status', 'order_date']
+    search_fields = ['po_number', 'supplier__name']
+    readonly_fields = ['po_number', 'uuid', 'order_date', 'created_at', 'updated_at']
+    inlines = [PurchaseOrderItemInline]
+
+
+@admin.register(StockCount)
+class StockCountAdmin(admin.ModelAdmin):
+    list_display = ['count_number', 'location', 'count_date', 'status', 'total_discrepancies']
+    list_filter = ['status', 'location', 'count_date']
+    search_fields = ['count_number']
+    readonly_fields = ['count_number', 'created_at', 'completed_at']
+
+
+@admin.register(StoreTransfer)
+class StoreTransferAdmin(admin.ModelAdmin):
+    list_display = ['transfer_number', 'from_store', 'to_store', 'status', 'transfer_date']
+    list_filter = ['status', 'from_store', 'to_store']
+    search_fields = ['transfer_number']
+    readonly_fields = ['transfer_number', 'transfer_date', 'created_at', 'updated_at']
+
+
+@admin.register(StoreStock)
+class StoreStockAdmin(admin.ModelAdmin):
+    list_display = ['store', 'product', 'quantity', 'reorder_level', 'is_low_stock']
+    list_filter = ['store']
+    search_fields = ['product__name', 'product__sku']
     
-    fieldsets = (
-        ('Batch Information', {
-            'fields': ('batch_number', 'product', 'status')
-        }),
-        ('Quantities', {
-            'fields': ('quantity', 'remaining_quantity')
-        }),
-        ('Dates', {
-            'fields': ('manufacturing_date', 'expiry_date')
-        }),
-        ('Purchase Info', {
-            'fields': ('purchase_order', 'purchase_price', 'supplier')
-        }),
-        ('Location', {
-            'fields': ('location', 'shelf_location')
-        }),
-        ('Quality Control', {
-            'fields': ('quality_passed', 'quality_notes', 'inspected_by', 'inspected_at')
-        }),
-        ('Notes', {
-            'fields': ('notes',),
-            'classes': ('collapse',)
-        }),
-        ('Timestamps', {
-            'fields': ('created_at', 'updated_at'),
-            'classes': ('collapse',)
-        }),
-    )
+    def is_low_stock(self, obj):
+        return obj.is_low_stock
+    is_low_stock.boolean = True
+    is_low_stock.short_description = 'Low Stock'
 
 
-# Rest of your inventory admin registrations...
+@admin.register(InventoryAlert)
+class InventoryAlertAdmin(admin.ModelAdmin):
+    list_display = ['alert_type', 'product', 'priority', 'is_resolved', 'created_at']
+    list_filter = ['alert_type', 'priority', 'is_resolved']
+    search_fields = ['product__name', 'message']
+    readonly_fields = ['created_at']

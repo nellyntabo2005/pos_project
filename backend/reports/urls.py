@@ -10,5 +10,5 @@ router.register(r'saved-reports', SavedReportViewSet, basename='saved-report')
 # router.register(r'exports', ReportExportViewSet, basename='report-export')
 
 urlpatterns = [
-    path('api/reports/', include(router.urls)),
+    path('', include(router.urls)),
 ]

@@ -9,5 +9,5 @@ router.register(r'return-items', ReturnItemViewSet, basename='return-item')
 router.register(r'return-images', ReturnImageViewSet, basename='return-image')
 
 urlpatterns = [
-    path('api/', include(router.urls)),
+    path('', include(router.urls)),
 ]

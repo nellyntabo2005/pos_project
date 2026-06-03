@@ -3,14 +3,32 @@ from rest_framework import serializers
 from decimal import Decimal
 from django.db import transaction
 from .models import (
-    StockMovement, Batch, PurchaseOrder, PurchaseOrderItem,
+    StockMovement, Supplier, Batch, PurchaseOrder, PurchaseOrderItem,
     StockCount, StockCountItem, StoreTransfer, StoreTransferItem,
     StoreStock, InventoryAlert, ImportJob
-)
-from products.serializers import ProductSerializer, SupplierSerializer
-from products.models import Product, Supplier
-from users.serializers import UserSerializer
 
+)
+
+
+from products.serializers import ProductSerializer
+from products.models import Product
+from .models import Supplier
+
+from users.serializers import UserSerializer
+  
+class SupplierSerializer(serializers.ModelSerializer):
+    """Serializer for Suppliers"""
+    
+    class Meta:
+        model = Supplier
+        fields = [
+            'id', 'name', 'code', 'contact_person', 'phone', 'email',
+            'website', 'address_line1', 'address_line2', 'city', 'county',
+            'postal_code', 'tax_number', 'bank_name', 'bank_account',
+            'is_active', 'is_preferred', 'payment_terms', 'notes',
+            'created_at', 'updated_at'
+        ]
+        read_only_fields = ['id', 'code', 'created_at', 'updated_at']
 
 class BatchSerializer(serializers.ModelSerializer):
     """

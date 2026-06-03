@@ -23,7 +23,7 @@ router.register(r'expense-categories', ExpenseCategoryViewSet, basename='expense
 router.register(r'expenses', ExpenseViewSet, basename='expense')
 
 urlpatterns = [
-    path('api/', include(router.urls)),
+    path('', include(router.urls)),
 ]
 path('mpesa-payments/callback/', MpesaPaymentViewSet.as_view({'post': 'mpesa_callback'}), name='mpesa-callback'),
 

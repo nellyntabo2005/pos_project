@@ -1,5 +1,5 @@
 # download_template_fixed.py
-import requests
+import requests # type: ignore
 
 # Your login credentials
 username = "Nelly"

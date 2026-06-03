@@ -1,20 +1,99 @@
 # inventory/models.py
 from django.db import models
-from django.core.validators import MinValueValidator, MaxValueValidator
+from django.core.validators import MinValueValidator
 from django.core.exceptions import ValidationError
 from decimal import Decimal
 import uuid
-from datetime import datetime, timedelta
+from datetime import datetime
 
-from products.models import Product, Category, Supplier
-from users.models import User
-from sales.models import Sale
+from products.models import Product, Category
 
 
+from django.db import models
+
+
+class ImportJob(models.Model):
+    file_name = models.CharField(max_length=255)
+    status = models.CharField(
+        max_length=50,
+        default="pending"
+    )
+    created_at = models.DateTimeField(
+        auto_now_add=True
+    )
+
+    def __str__(self):
+        return self.file_name
+# SUPPLIER MODEL (MOVED FROM PRODUCTS)
+
+class Supplier(models.Model):
+    """Supplier/Vendor model - moved from products to inventory"""
+    
+    name = models.CharField(max_length=200, db_index=True)
+    code = models.CharField(max_length=20, unique=True, blank=True)
+    contact_person = models.CharField(max_length=100, blank=True)
+    phone = models.CharField(max_length=20, db_index=True)
+    email = models.EmailField(blank=True)
+    website = models.URLField(blank=True)
+    
+    # Address
+    address_line1 = models.CharField(max_length=255, blank=True)
+    address_line2 = models.CharField(max_length=255, blank=True)
+    city = models.CharField(max_length=100, blank=True)
+    county = models.CharField(max_length=100, blank=True)
+    postal_code = models.CharField(max_length=20, blank=True)
+    
+    # Tax info
+    tax_number = models.CharField(max_length=50, blank=True)
+    
+    # Bank details
+    bank_name = models.CharField(max_length=100, blank=True)
+    bank_account = models.CharField(max_length=50, blank=True)
+    
+    # Status
+    is_active = models.BooleanField(default=True)
+    is_preferred = models.BooleanField(default=False)
+    
+    # Payment terms
+    payment_terms = models.IntegerField(default=30)
+    
+    # Notes
+    notes = models.TextField(blank=True)
+    
+    # Timestamps
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    
+    class Meta:
+        ordering = ['name']
+        indexes = [
+            models.Index(fields=['code']),
+            models.Index(fields=['phone']),
+            models.Index(fields=['is_active']),
+        ]
+    
+    def __str__(self):
+        return self.name
+    
+    def save(self, *args, **kwargs):
+        if not self.code:
+            last_supplier = Supplier.objects.order_by('-id').first()
+            if last_supplier and last_supplier.code:
+                try:
+                    last_num = int(last_supplier.code.split('-')[1])
+                    self.code = f"SUP-{last_num + 1:04d}"
+                except (IndexError, ValueError):
+                    self.code = "SUP-0001"
+            else:
+                self.code = "SUP-0001"
+        super().save(*args, **kwargs)
+
+
+# ============================================================
+# BATCH MODEL
+# ============================================================
 class Batch(models.Model):
-    """
-    Product batches for tracking expiry and manufacturing dates
-    """
+    """Product batches for tracking expiry dates"""
     
     STATUS_CHOICES = [
         ('active', 'Active'),
@@ -38,7 +117,7 @@ class Batch(models.Model):
     expiry_date = models.DateField(null=True, blank=True, db_index=True)
     
     purchase_order = models.ForeignKey('PurchaseOrder', on_delete=models.SET_NULL, null=True, blank=True)
-    purchase_price = models.DecimalField(max_digits=12, decimal_places=2)
+    purchase_price = models.DecimalField(max_digits=12, decimal_places=2, default=0)
     supplier = models.ForeignKey(Supplier, on_delete=models.SET_NULL, null=True, blank=True)
     
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='active', db_index=True)
@@ -48,7 +127,7 @@ class Batch(models.Model):
     
     quality_passed = models.BooleanField(default=True)
     quality_notes = models.TextField(blank=True)
-    inspected_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True)
+    inspected_by = models.ForeignKey('users.User', on_delete=models.SET_NULL, null=True, blank=True)
     inspected_at = models.DateTimeField(null=True, blank=True)
     
     notes = models.TextField(blank=True)
@@ -59,7 +138,7 @@ class Batch(models.Model):
         ordering = ['expiry_date', 'batch_number']
     
     def __str__(self):
-        return f"{self.batch_number} - {self.product.name} - {self.remaining_quantity} left"
+        return f"{self.batch_number} - {self.product.name}"
     
     def save(self, *args, **kwargs):
         if self.expiry_date and self.expiry_date < datetime.now().date():
@@ -69,6 +148,9 @@ class Batch(models.Model):
         super().save(*args, **kwargs)
 
 
+# ============================================================
+# STOCK MOVEMENT MODEL
+# ============================================================
 class StockMovement(models.Model):
     MOVEMENT_TYPES = [
         ('purchase', 'Purchase Order Received'),
@@ -83,7 +165,7 @@ class StockMovement(models.Model):
         ('production', 'Production'),
         ('sample', 'Sample/Tester'),
         ('donation', 'Donation/Write-off'),
-    ] #this will be monitored by the inventory clerk
+    ]
     
     movement_id = models.CharField(max_length=50, unique=True, editable=False, db_index=True)
     uuid = models.UUIDField(default=uuid.uuid4, editable=False, unique=True)
@@ -92,7 +174,7 @@ class StockMovement(models.Model):
     batch = models.ForeignKey(Batch, on_delete=models.SET_NULL, null=True, blank=True, related_name='movements')
     
     movement_type = models.CharField(max_length=20, choices=MOVEMENT_TYPES, db_index=True)
-    quantity = models.DecimalField(max_digits=12, decimal_places=2, validators=[MinValueValidator(0.01)])
+    quantity = models.DecimalField(max_digits=12, decimal_places=2, validators=[MinValueValidator(Decimal('0.01'))])
     
     stock_before = models.DecimalField(max_digits=12, decimal_places=2)
     stock_after = models.DecimalField(max_digits=12, decimal_places=2)
@@ -106,8 +188,8 @@ class StockMovement(models.Model):
     reason = models.TextField(blank=True)
     notes = models.TextField(blank=True)
     
-    approved_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='approved_movements')
-    recorded_by = models.ForeignKey(User, on_delete=models.PROTECT, related_name='stock_movements')
+    approved_by = models.ForeignKey('users.User', on_delete=models.SET_NULL, null=True, blank=True, related_name='approved_movements')
+    recorded_by = models.ForeignKey('users.User', on_delete=models.PROTECT, related_name='stock_movements')
     
     location = models.CharField(max_length=100, blank=True, default='Main Store')
     
@@ -140,6 +222,9 @@ class StockMovement(models.Model):
         super().save(*args, **kwargs)
 
 
+# ============================================================
+# PURCHASE ORDER MODEL
+# ============================================================
 class PurchaseOrder(models.Model):
     ORDER_STATUS = [
         ('draft', 'Draft'),
@@ -184,8 +269,8 @@ class PurchaseOrder(models.Model):
     supplier_notes = models.TextField(blank=True)
     internal_notes = models.TextField(blank=True)
     
-    created_by = models.ForeignKey(User, on_delete=models.PROTECT, related_name='purchase_orders')
-    approved_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='approved_orders')
+    created_by = models.ForeignKey('users.User', on_delete=models.PROTECT, related_name='purchase_orders')
+    approved_by = models.ForeignKey('users.User', on_delete=models.SET_NULL, null=True, blank=True, related_name='approved_orders')
     approved_at = models.DateTimeField(null=True, blank=True)
     
     created_at = models.DateTimeField(auto_now_add=True)
@@ -217,13 +302,21 @@ class PurchaseOrder(models.Model):
         
         self.total = self.subtotal + self.tax_amount + self.shipping_cost - self.discount_amount
         super().save(*args, **kwargs)
+    
+    def calculate_totals(self):
+        items = self.items.all()
+        self.subtotal = sum(item.subtotal for item in items)
+        self.tax_amount = self.subtotal * (self.tax_rate / 100)
+        self.total = self.subtotal + self.tax_amount + self.shipping_cost - self.discount_amount
+        self.save(update_fields=['subtotal', 'tax_amount', 'total'])
+        return self.total
 
 
 class PurchaseOrderItem(models.Model):
     purchase_order = models.ForeignKey(PurchaseOrder, on_delete=models.CASCADE, related_name='items')
     product = models.ForeignKey(Product, on_delete=models.PROTECT)
     
-    quantity = models.DecimalField(max_digits=12, decimal_places=2, validators=[MinValueValidator(0.01)])
+    quantity = models.DecimalField(max_digits=12, decimal_places=2, validators=[MinValueValidator(Decimal('0.01'))])
     quantity_received = models.DecimalField(max_digits=12, decimal_places=2, default=0)
     
     unit_cost = models.DecimalField(max_digits=12, decimal_places=2)
@@ -247,6 +340,9 @@ class PurchaseOrderItem(models.Model):
         return f"{self.product.name} - {self.quantity}"
 
 
+# ============================================================
+# STOCK COUNT MODELS
+# ============================================================
 class StockCount(models.Model):
     STATUS_CHOICES = [
         ('draft', 'Draft'),
@@ -265,8 +361,8 @@ class StockCount(models.Model):
     total_discrepancies = models.IntegerField(default=0)
     total_adjustment_value = models.DecimalField(max_digits=15, decimal_places=2, default=0)
     
-    created_by = models.ForeignKey(User, on_delete=models.PROTECT, related_name='stock_counts')
-    completed_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='completed_counts')
+    created_by = models.ForeignKey('users.User', on_delete=models.PROTECT, related_name='stock_counts')
+    completed_by = models.ForeignKey('users.User', on_delete=models.SET_NULL, null=True, blank=True, related_name='completed_counts')
     
     created_at = models.DateTimeField(auto_now_add=True)
     completed_at = models.DateTimeField(null=True, blank=True)
@@ -318,9 +414,12 @@ class StockCountItem(models.Model):
         super().save(*args, **kwargs)
     
     def __str__(self):
-        return f"{self.product.name}: Expected {self.expected_quantity}, Counted {self.counted_quantity}"
+        return f"{self.product.name}: {self.difference}"
 
 
+# ============================================================
+# STORE TRANSFER MODELS
+# ============================================================
 class StoreTransfer(models.Model):
     TRANSFER_STATUS = [
         ('pending', 'Pending'),
@@ -346,9 +445,9 @@ class StoreTransfer(models.Model):
     tracking_number = models.CharField(max_length=100, blank=True)
     courier = models.CharField(max_length=100, blank=True)
     
-    requested_by = models.ForeignKey(User, on_delete=models.PROTECT, related_name='transfers_requested')
-    approved_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='transfers_approved')
-    received_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='transfers_received')
+    requested_by = models.ForeignKey('users.User', on_delete=models.PROTECT, related_name='transfers_requested')
+    approved_by = models.ForeignKey('users.User', on_delete=models.SET_NULL, null=True, blank=True, related_name='transfers_approved')
+    received_by = models.ForeignKey('users.User', on_delete=models.SET_NULL, null=True, blank=True, related_name='transfers_received')
     
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -379,7 +478,7 @@ class StoreTransfer(models.Model):
 class StoreTransferItem(models.Model):
     transfer = models.ForeignKey(StoreTransfer, on_delete=models.CASCADE, related_name='items')
     product = models.ForeignKey(Product, on_delete=models.PROTECT)
-    quantity = models.DecimalField(max_digits=12, decimal_places=2, validators=[MinValueValidator(0.01)])
+    quantity = models.DecimalField(max_digits=12, decimal_places=2, validators=[MinValueValidator(Decimal('0.01'))])
     
     class Meta:
         unique_together = ['transfer', 'product']
@@ -403,8 +502,53 @@ class StoreStock(models.Model):
         return f"{self.store} - {self.product.name}: {self.quantity}"
 
 
+class ImportJob(models.Model):
+    """Track imports/exports processing jobs"""
+
+    JOB_TYPE_CHOICES = [
+        ('products', 'Product Import'),
+        ('suppliers', 'Supplier Import'),
+        ('stock', 'Stock Update'),
+        ('prices', 'Price Update'),
+        ('purchase_orders', 'Purchase Order Import'),
+    ]
+
+    STATUS_CHOICES = [
+        ('pending', 'Pending'),
+        ('processing', 'Processing'),
+        ('completed', 'Completed'),
+        ('failed', 'Failed'),
+        ('partial', 'Partially Completed'),
+    ]
+
+    job_id = models.CharField(max_length=50, unique=True, editable=False)
+    job_type = models.CharField(max_length=20, choices=JOB_TYPE_CHOICES)
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='pending')
+
+    original_filename = models.CharField(max_length=255)
+    file_size = models.IntegerField()
+    file_path = models.CharField(max_length=500, blank=True)
+
+    total_records = models.IntegerField(default=0)
+    successful_records = models.IntegerField(default=0)
+    failed_records = models.IntegerField(default=0)
+    skipped_records = models.IntegerField(default=0)
+    error_log = models.JSONField(default=list)
+
+    created_by = models.ForeignKey('users.User', on_delete=models.PROTECT, related_name='inventory_import_jobs')
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    completed_at = models.DateTimeField(blank=True, null=True)
+
+    class Meta:
+        ordering = ['-created_at']
+
+    def __str__(self):
+        return f"{self.job_id} ({self.get_status_display()})"
+
+
 class InventoryAlert(models.Model):
-    # Define ALERT_TYPES here - this was missing!
+
     ALERT_TYPES = [
         ('low_stock', 'Low Stock'),
         ('out_of_stock', 'Out of Stock'),
@@ -432,7 +576,7 @@ class InventoryAlert(models.Model):
     suggested_action = models.TextField(blank=True)
     
     is_resolved = models.BooleanField(default=False)
-    resolved_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True)
+    resolved_by = models.ForeignKey('users.User', on_delete=models.SET_NULL, null=True, blank=True)
     resolved_at = models.DateTimeField(null=True, blank=True)
     resolution_notes = models.TextField(blank=True)
     
@@ -443,53 +587,3 @@ class InventoryAlert(models.Model):
     
     def __str__(self):
         return f"{self.get_alert_type_display()} - {self.product.name if self.product else 'General'}"
-
-
-class ImportJob(models.Model):
-    JOB_TYPES = [
-        ('products', 'Product Import'),
-        ('suppliers', 'Supplier Import'),
-        ('stock', 'Stock Update'),
-        ('prices', 'Price Update'),
-        ('purchase_orders', 'Purchase Order Import'),
-    ]
-    
-    STATUS_CHOICES = [
-        ('pending', 'Pending'),
-        ('processing', 'Processing'),
-        ('completed', 'Completed'),
-        ('failed', 'Failed'),
-        ('partial', 'Partially Completed'),
-    ]
-    
-    job_id = models.CharField(max_length=50, unique=True, editable=False)
-    job_type = models.CharField(max_length=20, choices=JOB_TYPES)
-    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='pending')
-    
-    original_filename = models.CharField(max_length=255)
-    file_size = models.IntegerField()
-    file_path = models.CharField(max_length=500, blank=True)
-    
-    total_records = models.IntegerField(default=0)
-    successful_records = models.IntegerField(default=0)
-    failed_records = models.IntegerField(default=0)
-    skipped_records = models.IntegerField(default=0)
-    
-    error_log = models.JSONField(default=list)
-    
-    created_by = models.ForeignKey(User, on_delete=models.PROTECT, related_name='import_jobs')
-    
-    created_at = models.DateTimeField(auto_now_add=True)
-    completed_at = models.DateTimeField(null=True, blank=True)
-    
-    class Meta:
-        ordering = ['-created_at']
-    
-    def __str__(self):
-        return f"{self.job_type} - {self.status}"
-    
-    def save(self, *args, **kwargs):
-        if not self.job_id:
-            date_str = datetime.now().strftime('%Y%m%d%H%M%S')
-            self.job_id = f"IMP-{date_str}"
-        super().save(*args, **kwargs)

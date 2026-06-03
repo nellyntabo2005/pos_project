@@ -1,6 +1,6 @@
 # products/admin.py
 from django.contrib import admin
-from .models import Category, Supplier, Product, ProductImage
+from .models import Category, Product, ProductImage
 
 
 @admin.register(Category)
@@ -11,13 +11,6 @@ class CategoryAdmin(admin.ModelAdmin):
     prepopulated_fields = {'slug': ('name',)}
 
 
-@admin.register(Supplier)
-class SupplierAdmin(admin.ModelAdmin):
-    list_display = ['id', 'name', 'phone', 'email', 'is_active']
-    list_filter = ['is_active']
-    search_fields = ['name', 'phone', 'code']
-
-
 class ProductImageInline(admin.TabularInline):
     model = ProductImage
     extra = 1
@@ -26,7 +19,7 @@ class ProductImageInline(admin.TabularInline):
 
 @admin.register(Product)
 class ProductAdmin(admin.ModelAdmin):
-    list_display = ['id', 'name', 'retail_price', 'stock_quantity', 'is_active']
+    list_display = ['id', 'name', 'sku', 'retail_price', 'stock_quantity', 'is_active']
     list_filter = ['is_active', 'category', 'unit']
     search_fields = ['name', 'sku', 'barcode']
     readonly_fields = ['created_at', 'updated_at']
@@ -40,13 +33,20 @@ class ProductAdmin(admin.ModelAdmin):
             'fields': ('category', 'supplier', 'unit')
         }),
         ('Pricing', {
-            'fields': ('cost_price', 'retail_price', 'wholesale_price')
+            'fields': ('cost_price', 'retail_price', 'wholesale_price', 'carton_price', 'carton_quantity')
         }),
         ('Stock Management', {
-            'fields': ('stock_quantity', 'reorder_level', 'reorder_quantity')
+            'fields': ('stock_quantity', 'reorder_level', 'reorder_quantity', 'minimum_stock', 'maximum_stock')
         }),
-        ('Tax & Status', {
-            'fields': ('tax_rate', 'is_active', 'is_featured', 'main_image')
+        ('Tax & Shipping', {
+            'fields': ('tax_rate', 'weight', 'length', 'width', 'height')
+        }),
+        ('Status', {
+            'fields': ('is_active', 'is_featured', 'is_digital', 'main_image')
+        }),
+        ('Notes', {
+            'fields': ('notes',),
+            'classes': ('collapse',)
         }),
         ('Timestamps', {
             'fields': ('created_at', 'updated_at'),

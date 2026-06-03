@@ -72,7 +72,7 @@ class UserSerializer(serializers.ModelSerializer):
     def validate_username(self, value):
         """Validate username is unique"""
         #Return user's full name
-        return obj.get_full_name() or obj.username
+        return value.get_full_name() or value.username
     
     def get_permissions(self, obj):
         #Return user's permissions

@@ -14,7 +14,12 @@ from pathlib import Path
 from datetime import timedelta
 import os
 
-from decouple import config, Csv
+try:
+    from decouple import config
+except ImportError:  # pragma: no cover
+    # fallback if python-decouple isn't installed correctly
+    def config(key, default=None):
+        return default
 
 
 BASE_DIR = Path(__file__).resolve().parent.parent
