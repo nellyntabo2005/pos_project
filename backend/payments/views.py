@@ -2,9 +2,10 @@
 from rest_framework import viewsets, status
 from rest_framework.decorators import action
 from rest_framework.response import Response
-from rest_framework.permissions import IsAuthenticated
+from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.filters import SearchFilter, OrderingFilter
 from django_filters.rest_framework import DjangoFilterBackend
+from django.conf import settings
 from django.db.models import Sum, Count
 from django.http import HttpResponse
 from django.utils import timezone
@@ -146,6 +147,11 @@ class MpesaPaymentViewSet(viewsets.GenericViewSet):
     """ViewSet for M-Pesa payment operations"""
     
     permission_classes = [IsAuthenticated]
+
+    def get_permissions(self):
+        if self.action == 'mpesa_callback':
+            return [AllowAny()]
+        return [permission() for permission in self.permission_classes]
     
     @action(detail=False, methods=['post'], url_path='stk-push')
     def initiate_stk_push(self, request):
@@ -155,6 +161,47 @@ class MpesaPaymentViewSet(viewsets.GenericViewSet):
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
         
         data = serializer.validated_data
+
+        if getattr(settings, 'MPESA_DEMO_MODE', False):
+            try:
+                mpesa_service = MpesaService()
+                phone = data['phone_number']
+                if phone.startswith('0'):
+                    phone = '254' + phone[1:]
+                elif phone.startswith('+'):
+                    phone = phone[1:]
+
+                transaction = MpesaTransaction.objects.create(
+                    merchant_request_id=f"DEMO-MER-{timezone.now().strftime('%Y%m%d%H%M%S%f')}",
+                    checkout_request_id=f"DEMO-CHK-{timezone.now().strftime('%Y%m%d%H%M%S%f')}",
+                    transaction_type='stk_push',
+                    amount=data['amount'],
+                    phone_number=phone,
+                    account_reference=data['account_reference'],
+                    transaction_desc=data.get('transaction_desc', 'Payment for goods'),
+                    status='pending',
+                    result_code=0,
+                    result_desc='Transaction complete',
+                    mpesa_account=mpesa_service.account,
+                )
+                transaction.mark_completed(f"DEMO{transaction.id:08d}", 0, 'Transaction complete')
+
+                return Response({
+                    'success': True,
+                    'demo_mode': True,
+                    'message': 'Transaction complete',
+                    'checkout_request_id': transaction.checkout_request_id,
+                    'transaction': {
+                        'id': transaction.id,
+                        'checkout_request_id': transaction.checkout_request_id,
+                        'status': transaction.status,
+                    },
+                })
+            except Exception as e:
+                return Response(
+                    {'success': False, 'error': str(e)},
+                    status=status.HTTP_500_INTERNAL_SERVER_ERROR
+                )
         
         try:
             mpesa_service = MpesaService()
@@ -178,10 +225,64 @@ class MpesaPaymentViewSet(viewsets.GenericViewSet):
             return Response(result)
             
         except Exception as e:
+            error_message = str(e)
+            if '403' in error_message and 'stkpush' in error_message.lower():
+                error_message = (
+                    'M-Pesa STK Push is not authorized for the configured Daraja app. '
+                    'Check the consumer key, consumer secret, shortcode, passkey, and environment.'
+                )
             return Response(
-                {'error': str(e)},
+                {'success': False, 'error': error_message},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
+
+    @action(detail=False, methods=['get', 'post'], url_path='status')
+    def status(self, request):
+        checkout_request_id = (
+            request.query_params.get('checkout_request_id')
+            or request.data.get('checkout_request_id')
+        )
+
+        if not checkout_request_id:
+            return Response(
+                {'error': 'checkout_request_id is required'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        transaction = MpesaTransaction.objects.filter(
+            checkout_request_id=checkout_request_id
+        ).first()
+
+        if not transaction:
+            return Response(
+                {'error': 'M-Pesa transaction not found'},
+                status=status.HTTP_404_NOT_FOUND
+            )
+
+        query_error = ''
+        if transaction.status == 'pending':
+            try:
+                MpesaService(transaction.mpesa_account).query_status(checkout_request_id)
+                transaction.refresh_from_db()
+            except Exception as e:
+                query_error = str(e)
+                if 'authorization failed' in query_error.lower() or '403' in query_error:
+                    query_error = (
+                        'M-Pesa payment could not be confirmed because Daraja authorization failed. '
+                        'Check MPESA_CONSUMER_KEY, MPESA_CONSUMER_SECRET, shortcode, passkey, and environment.'
+                    )
+
+        return Response({
+            'id': transaction.id,
+            'checkout_request_id': transaction.checkout_request_id,
+            'status': transaction.status,
+            'amount': transaction.amount,
+            'mpesa_receipt_number': transaction.mpesa_receipt_number,
+            'result_code': transaction.result_code,
+            'result_desc': transaction.result_desc,
+            'query_error': query_error,
+            'completed_at': transaction.completed_at,
+        })
     
     @action(detail=False, methods=['post'], url_path='callback')
     def mpesa_callback(self, request):

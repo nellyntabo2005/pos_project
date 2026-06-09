@@ -18,12 +18,13 @@ from users.serializers import UserSerializer
   
 class SupplierSerializer(serializers.ModelSerializer):
     """Serializer for Suppliers"""
+    address = serializers.CharField(source='address_line1', required=False, allow_blank=True)
     
     class Meta:
         model = Supplier
         fields = [
             'id', 'name', 'code', 'contact_person', 'phone', 'email',
-            'website', 'address_line1', 'address_line2', 'city', 'county',
+            'website', 'address', 'address_line1', 'address_line2', 'city', 'county',
             'postal_code', 'tax_number', 'bank_name', 'bank_account',
             'is_active', 'is_preferred', 'payment_terms', 'notes',
             'created_at', 'updated_at'

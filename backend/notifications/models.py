@@ -3,6 +3,8 @@
 from django.db import models
 from django.core.validators import MinValueValidator, MaxValueValidator
 from django.core.exceptions import ValidationError
+from channels.layers import get_channel_layer
+from asgiref.sync import async_to_sync
 import uuid
 from datetime import datetime, timedelta
 
@@ -296,10 +298,44 @@ class Notification(models.Model):
         return f"{self.notification_id} - {self.title} - {self.status}"
     
     def save(self, *args, **kwargs):
+        is_new = self.pk is None
         if not self.notification_id:
             date_str = datetime.now().strftime('%Y%m%d%H%M%S')
-            self.notification_id = f"NOT-{date_str}-{self.id or '000'}"
+            self.notification_id = f"NOT-{date_str}-{uuid.uuid4().hex[:8].upper()}"
         super().save(*args, **kwargs)
+        if is_new:
+            self.broadcast()
+
+    def broadcast(self):
+        users = []
+        if self.recipient_user_id:
+            users.append(self.recipient_user_id)
+        elif self.recipient_email:
+            users.extend(User.objects.filter(email=self.recipient_email, is_active=True).values_list('id', flat=True))
+
+        if not users:
+            return
+
+        channel_layer = get_channel_layer()
+        if not channel_layer:
+            return
+
+        payload = {
+            "id": self.id,
+            "title": self.title,
+            "message": self.message,
+            "priority": self.priority,
+            "status": self.status,
+            "created_at": self.created_at.isoformat() if self.created_at else None,
+        }
+        try:
+            for user_id in users:
+                async_to_sync(channel_layer.group_send)(
+                    f"user_{user_id}",
+                    {"type": "send_notification", "message": payload}
+                )
+        except Exception:
+            pass
     
     def mark_as_read(self):
         """Mark notification as read"""

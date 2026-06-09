@@ -10,9 +10,9 @@ from .models import (
 
 @admin.register(Supplier)
 class SupplierAdmin(admin.ModelAdmin):
-    list_display = ['id', 'name', 'code', 'phone', 'email', 'is_active', 'is_preferred']
+    list_display = ['id', 'name', 'code', 'contact_person', 'phone', 'email', 'address_line1', 'is_active', 'is_preferred']
     list_filter = ['is_active', 'is_preferred', 'city']
-    search_fields = ['name', 'code', 'phone', 'email']
+    search_fields = ['name', 'code', 'contact_person', 'phone', 'email', 'address_line1']
     readonly_fields = ['created_at', 'updated_at']
 
 

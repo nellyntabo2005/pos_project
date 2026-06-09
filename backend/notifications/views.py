@@ -137,10 +137,14 @@ class NotificationViewSet(viewsets.ReadOnlyModelViewSet):
     
     def get_queryset(self):
         """Users see their own notifications"""
-        return Notification.objects.filter(
+        queryset = Notification.objects.filter(
             Q(recipient_user=self.request.user) |
             Q(recipient_email=self.request.user.email)
         )
+        status_filter = self.request.query_params.get('status')
+        if status_filter:
+            queryset = queryset.filter(status=status_filter)
+        return queryset
     
     @action(detail=True, methods=['post'], url_path='mark-read')
     def mark_as_read(self, request, pk=None):

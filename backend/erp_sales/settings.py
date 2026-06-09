@@ -105,16 +105,26 @@ ASGI_APPLICATION = 'erp_sales.asgi.application'
 
 
 # Database
-DATABASES = {
-    'default': {
-        'ENGINE': 'django.db.backends.mysql',
-        'NAME': 'pos_db',
-        'USER': 'root',
-        'PASSWORD': 'Bonareri123',
-        'HOST': '127.0.0.1',
-        'PORT': '3306',
+# Local development defaults to SQLite so the cloned backend can run without
+# requiring a preconfigured MySQL account. Set DB_ENGINE=mysql in .env to use MySQL.
+if config('DB_ENGINE', default='sqlite') == 'mysql':
+    DATABASES = {
+        'default': {
+            'ENGINE': 'django.db.backends.mysql',
+            'NAME': config('DB_NAME', default='pos_db'),
+            'USER': config('DB_USER', default='root'),
+            'PASSWORD': config('DB_PASSWORD', default=''),
+            'HOST': config('DB_HOST', default='127.0.0.1'),
+            'PORT': config('DB_PORT', default='3306'),
+        }
     }
-}
+else:
+    DATABASES = {
+        'default': {
+            'ENGINE': 'django.db.backends.sqlite3',
+            'NAME': BASE_DIR / 'db.sqlite3',
+        }
+    }
 
 
 # Password validation
@@ -207,6 +217,7 @@ CORS_ALLOW_CREDENTIALS = True
 CORS_ALLOWED_ORIGINS = [
     'http://localhost:3000',
     'http://localhost:5173',
+    'http://127.0.0.1:5173',
     'http://127.0.0.1:8000',
 ]
 
@@ -236,10 +247,11 @@ MPESA_ENVIRONMENT = 'sandbox'
 # Optional decouple-based config
 DARAJA_ENVIRONMENT = config('DARAJA_ENVIRONMENT', default='sandbox')
 MPESA_EXPRESS_SHORTCODE = config('MPESA_EXPRESS_SHORTCODE', default='174379')
-MPESA_CALLBACK_URL = config('MPESA_CALLBACK_URL', default='https://yourdomain.com/api/payments/mpesa-callback/')
+MPESA_CALLBACK_URL = config('MPESA_CALLBACK_URL', default='https://yourdomain.com/api/payments/mpesa-payments/callback/')
 MPESA_CONSUMER_KEY = config('MPESA_CONSUMER_KEY', default=MPESA_CONSUMER_KEY)
 MPESA_CONSUMER_SECRET = config('MPESA_CONSUMER_SECRET', default=MPESA_CONSUMER_SECRET)
 MPESA_PASSKEY = config('MPESA_PASSKEY', default=MPESA_PASSKEY)
+MPESA_DEMO_MODE = config('MPESA_DEMO_MODE', default=False, cast=bool)
 
 
 # LOGGING

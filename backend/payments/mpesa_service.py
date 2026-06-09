@@ -3,7 +3,9 @@ import requests
 import base64
 import json
 from datetime import datetime
+from decimal import Decimal
 from django.conf import settings
+from django.core.cache import cache
 from django.utils import timezone
 from .models import MpesaAccount, MpesaTransaction, MpesaCallbackLog
 
@@ -16,18 +18,71 @@ class MpesaService:
             self.account = account
         else:
             self.account = MpesaAccount.objects.filter(is_default=True, is_active=True).first()
+            if not self.account:
+                self.account = self._create_default_account_from_settings()
         
         if not self.account:
             raise Exception("No active M-Pesa account found")
         
-        self.base_url = self.account.api_base_url
+        self.base_url = self._get_base_url()
         self.consumer_key = self.account.consumer_key
         self.consumer_secret = self.account.consumer_secret
+
+    def _create_default_account_from_settings(self):
+        required_settings = [
+            'MPESA_CONSUMER_KEY',
+            'MPESA_CONSUMER_SECRET',
+            'MPESA_PASSKEY',
+        ]
+        missing_settings = [
+            setting_name
+            for setting_name in required_settings
+            if not getattr(settings, setting_name, '')
+        ]
+
+        shortcode = (
+            getattr(settings, 'MPESA_EXPRESS_SHORTCODE', '')
+            or getattr(settings, 'MPESA_SHORTCODE', '')
+        )
+        if not shortcode:
+            missing_settings.append('MPESA_SHORTCODE')
+
+        if missing_settings:
+            raise Exception(f"Missing M-Pesa settings: {', '.join(missing_settings)}")
+
+        callback_url = getattr(settings, 'MPESA_CALLBACK_URL', '') or 'https://example.com/api/payments/mpesa-payments/callback/'
+
+        return MpesaAccount.objects.create(
+            name='Default M-Pesa Sandbox',
+            business_type='paybill',
+            shortcode=shortcode,
+            passkey=getattr(settings, 'MPESA_PASSKEY'),
+            consumer_key=getattr(settings, 'MPESA_CONSUMER_KEY'),
+            consumer_secret=getattr(settings, 'MPESA_CONSUMER_SECRET'),
+            environment=getattr(settings, 'DARAJA_ENVIRONMENT', getattr(settings, 'MPESA_ENVIRONMENT', 'sandbox')),
+            callback_url=callback_url,
+            timeout_url=callback_url,
+            result_url=callback_url,
+            is_active=True,
+            is_default=True,
+            business_name='Optimum POS',
+            business_shortcode=shortcode,
+        )
+
+    def _get_base_url(self):
+        if self.account.environment == 'production':
+            return 'https://api.safaricom.co.ke'
+        return 'https://sandbox.safaricom.co.ke'
     
     def get_access_token(self):
         """
         Get OAuth access token from Safaricom
         """
+        cache_key = f"mpesa_access_token_{self.account.id}_{self.account.environment}"
+        cached_token = cache.get(cache_key)
+        if cached_token:
+            return cached_token
+
         url = f"{self.base_url}/oauth/v1/generate?grant_type=client_credentials"
         
         # Encode credentials
@@ -44,12 +99,20 @@ class MpesaService:
             data = response.json()
             
             if 'access_token' in data:
+                cache.set(cache_key, data['access_token'], 3300)
                 return data['access_token']
             else:
                 raise Exception(f"Failed to get token: {data}")
                 
         except requests.exceptions.RequestException as e:
-            raise Exception(f"M-Pesa API error: {str(e)}")
+            response_text = ''
+            if getattr(e, 'response', None) is not None:
+                response_text = e.response.text[:300]
+            detail = f" {response_text}" if response_text else ''
+            raise Exception(
+                "M-Pesa API authorization failed. Check the Daraja consumer key, "
+                f"consumer secret, shortcode, passkey, and environment.{detail}"
+            )
     
     def stk_push(self, phone_number, amount, account_reference, transaction_desc, callback_url=None):
         """
@@ -168,24 +231,24 @@ class MpesaService:
             ).first()
             
             if transaction:
-                result_code = result.get('ResultCode')
+                result_code = str(result.get('ResultCode', ''))
                 if result_code == '0':
                     transaction.mark_completed(
-                        receipt_number=result.get('ReceiptNumber', ''),
+                        receipt_number=result.get('MpesaReceiptNumber') or result.get('ReceiptNumber') or checkout_request_id,
                         result_code=0,
                         result_desc=result.get('ResultDesc', 'Success')
                     )
-                else:
+                elif result_code:
                     transaction.mark_failed(
                         result_code=int(result_code) if result_code else -1,
                         result_desc=result.get('ResultDesc', 'Failed')
                     )
             
             return {
-                'success': result.get('ResultCode') == '0',
+                'success': str(result.get('ResultCode', '')) == '0',
                 'result_code': result.get('ResultCode'),
                 'result_desc': result.get('ResultDesc'),
-                'receipt_number': result.get('ReceiptNumber')
+                'receipt_number': result.get('MpesaReceiptNumber') or result.get('ReceiptNumber')
             }
             
         except requests.exceptions.RequestException as e:
@@ -339,13 +402,23 @@ class MpesaCallbackHandler:
             
             # Process callback
             if result_code == 0:
-                # Success - get receipt number
+                # Success - confirm amount and receipt number from callback metadata.
                 receipt_number = None
+                paid_amount = None
                 callback_metadata = stk_callback.get('CallbackMetadata', {})
                 for item in callback_metadata.get('Item', []):
-                    if item.get('Name') == 'ReceiptNumber':
+                    if item.get('Name') in ['MpesaReceiptNumber', 'ReceiptNumber']:
                         receipt_number = item.get('Value')
-                        break
+                    if item.get('Name') == 'Amount':
+                        paid_amount = item.get('Value')
+
+                transaction.callback_data = request_data
+                if paid_amount is not None and transaction.amount != Decimal(str(paid_amount)):
+                    transaction.mark_failed(
+                        result_code,
+                        f"Amount mismatch. Expected {transaction.amount}, received {paid_amount}"
+                    )
+                    return False, transaction.result_desc
                 
                 transaction.mark_completed(receipt_number, result_code, result_desc)
                 return True, "Transaction completed successfully"

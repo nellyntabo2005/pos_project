@@ -69,7 +69,7 @@ class Customer(models.Model):
     )
     
     # === LOYALTY SYSTEM ===
-    loyalty_records = models.IntegerField(
+    loyalty_points = models.IntegerField(
         default=0,
         validators=[MinValueValidator(0)],
         help_text="Accumulated loyalty points"
@@ -185,14 +185,13 @@ class Customer(models.Model):
         """Return formatted full address"""
         parts = [self.address_line1, self.address_line2, self.city, self.county]
         return ", ".join([p for p in parts if p])
-        return self.name
 
 class loyalty_points(models.Model):
 
     customer = models.ForeignKey(
         Customer,
         on_delete=models.CASCADE,
-        related_name='loyalty_points'
+        related_name='loyalty_point_records'
     )
 
     points = models.IntegerField(default=0)

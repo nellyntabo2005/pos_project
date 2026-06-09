@@ -104,6 +104,7 @@ class Product(models.Model):
     
     # Image
     main_image = models.ImageField(upload_to='products/', null=True, blank=True)
+    external_image_url = models.URLField(blank=True)
     
     # Notes
     notes = models.TextField(blank=True)

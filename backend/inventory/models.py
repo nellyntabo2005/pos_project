@@ -77,15 +77,13 @@ class Supplier(models.Model):
     
     def save(self, *args, **kwargs):
         if not self.code:
-            last_supplier = Supplier.objects.order_by('-id').first()
-            if last_supplier and last_supplier.code:
-                try:
-                    last_num = int(last_supplier.code.split('-')[1])
-                    self.code = f"SUP-{last_num + 1:04d}"
-                except (IndexError, ValueError):
-                    self.code = "SUP-0001"
-            else:
-                self.code = "SUP-0001"
+            next_number = Supplier.objects.count() + 1
+            while True:
+                candidate = f"SUP-{next_number:04d}"
+                if not Supplier.objects.filter(code=candidate).exclude(pk=self.pk).exists():
+                    self.code = candidate
+                    break
+                next_number += 1
         super().save(*args, **kwargs)
 
 

@@ -1,4 +1,9 @@
 # products/serializers.py
+import base64
+import uuid
+
+from django.core.files.base import ContentFile
+from django.utils.text import slugify
 from rest_framework import serializers
 from decimal import Decimal
 from .models import Category, Product, ProductImage
@@ -32,11 +37,13 @@ class CategorySerializer(serializers.ModelSerializer):
 
 
 class SupplierSerializer(serializers.ModelSerializer):
+    address = serializers.CharField(source='address_line1', required=False, allow_blank=True)
+
     class Meta:
         model = Supplier
         fields = [
             'id', 'name', 'code', 'contact_person', 'phone', 'email',
-            'website', 'address_line1', 'address_line2', 'city', 'county',
+            'website', 'address', 'address_line1', 'address_line2', 'city', 'county',
             'postal_code', 'tax_number', 'bank_name', 'bank_account',
             'is_active', 'is_preferred', 'payment_terms', 'notes',
             'created_at', 'updated_at'
@@ -60,8 +67,11 @@ class ProductImageSerializer(serializers.ModelSerializer):
 
 class ProductSerializer(serializers.ModelSerializer):
     category_name = serializers.SerializerMethodField()
+    category_name_input = serializers.CharField(write_only=True, required=False, allow_blank=True)
     supplier_name = serializers.SerializerMethodField()
     images = ProductImageSerializer(many=True, read_only=True)
+    image_url = serializers.SerializerMethodField()
+    image_data = serializers.CharField(write_only=True, required=False, allow_blank=True)
     
     profit_margin = serializers.DecimalField(read_only=True, max_digits=10, decimal_places=2)
     is_low_stock = serializers.BooleanField(read_only=True)
@@ -76,6 +86,7 @@ class ProductSerializer(serializers.ModelSerializer):
             'stock_quantity', 'reorder_level', 'reorder_quantity', 'minimum_stock', 'maximum_stock',
             'unit', 'tax_rate', 'weight', 'length', 'width', 'height',
             'is_active', 'is_featured', 'is_digital', 'main_image',
+            'external_image_url', 'image_url', 'image_data', 'category_name_input',
             'profit_margin', 'is_low_stock', 'stock_value',
             'notes', 'created_at', 'updated_at', 'last_purchased_at',
             'images'
@@ -87,6 +98,15 @@ class ProductSerializer(serializers.ModelSerializer):
     
     def get_category_name(self, obj):
         return obj.category.name if obj.category else None
+
+    def get_image_url(self, obj):
+        if obj.external_image_url:
+            return obj.external_image_url
+        if obj.main_image:
+            request = self.context.get('request')
+            url = obj.main_image.url
+            return request.build_absolute_uri(url) if request else url
+        return None
     
     def get_supplier_name(self, obj):
         return obj.supplier.name if obj.supplier else None
@@ -95,6 +115,56 @@ class ProductSerializer(serializers.ModelSerializer):
         if value <= 0:
             raise serializers.ValidationError("Retail price must be greater than zero")
         return value
+
+    def _apply_category_name(self, validated_data):
+        category_name = validated_data.pop('category_name_input', '').strip()
+        if category_name and not validated_data.get('category'):
+            base_slug = slugify(category_name) or 'category'
+            slug = base_slug
+            counter = 1
+            while Category.objects.filter(slug=slug).exclude(name=category_name).exists():
+                counter += 1
+                slug = f"{base_slug}-{counter}"
+            category, _ = Category.objects.get_or_create(
+                name=category_name,
+                defaults={'slug': slug}
+            )
+            validated_data['category'] = category
+
+    def _apply_image_data(self, instance, image_data):
+        if not image_data:
+            return
+
+        if image_data.startswith('http://') or image_data.startswith('https://'):
+            instance.external_image_url = image_data
+            instance.save(update_fields=['external_image_url'])
+            return
+
+        if not image_data.startswith('data:image/'):
+            return
+
+        header, encoded = image_data.split(',', 1)
+        extension = header.split(';', 1)[0].split('/', 1)[1] or 'png'
+        image_file = ContentFile(
+            base64.b64decode(encoded),
+            name=f"{slugify(instance.name) or 'product'}-{uuid.uuid4().hex[:8]}.{extension}"
+        )
+        instance.external_image_url = ''
+        instance.main_image.save(image_file.name, image_file, save=True)
+
+    def create(self, validated_data):
+        image_data = validated_data.pop('image_data', '')
+        self._apply_category_name(validated_data)
+        instance = super().create(validated_data)
+        self._apply_image_data(instance, image_data)
+        return instance
+
+    def update(self, instance, validated_data):
+        image_data = validated_data.pop('image_data', '')
+        self._apply_category_name(validated_data)
+        instance = super().update(instance, validated_data)
+        self._apply_image_data(instance, image_data)
+        return instance
 
 
 class ProductImportSerializer(serializers.Serializer):

@@ -6,6 +6,7 @@ from rest_framework.permissions import IsAuthenticated, AllowAny
 from rest_framework.filters import SearchFilter, OrderingFilter
 from django_filters.rest_framework import DjangoFilterBackend
 from django.contrib.auth import authenticate
+from django.contrib.auth.models import update_last_login
 from rest_framework_simplejwt.tokens import RefreshToken
 from .models import User
 from .serializers import (
@@ -59,7 +60,7 @@ class UserViewSet(viewsets.ModelViewSet):
     
     def get_permissions(self):
         """Custom permissions based on action"""
-        if self.action in ['create']:
+        if self.action in ['create', 'login']:
             # Allow anyone to create? Or only admins?
             # For now, allow anyone but you can change
             return [AllowAny()]
@@ -115,6 +116,7 @@ class UserViewSet(viewsets.ModelViewSet):
         # Update user status
         user.is_online = True
         user.last_activity = timezone.now()
+        update_last_login(None, user)
         
         # Get client IP
         x_forwarded_for = request.META.get('HTTP_X_FORWARDED_FOR')

@@ -16,8 +16,13 @@ class CustomerAdmin(admin.ModelAdmin):
         'name',
         'phone',
         'email',
+        'city',
+        'county',
+        'tax_number',
+        'loyalty_points',
         'total_spent',
         'pricing_tier',
+        'is_blacklisted',
         'is_active',
         'last_purchase_date_display',
     ]
@@ -36,6 +41,9 @@ class CustomerAdmin(admin.ModelAdmin):
         'name',
         'phone',
         'email',
+        'city',
+        'county',
+        'tax_number',
     ]
     
     # Read-only fields
