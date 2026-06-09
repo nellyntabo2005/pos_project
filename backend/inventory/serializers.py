@@ -221,7 +221,7 @@ class PurchaseOrderReceiveSerializer(serializers.Serializer):
     Serializer for receiving purchase order items
     """
     item_id = serializers.IntegerField()
-    quantity = serializers.DecimalField(max_digits=12, decimal_places=2, min_value=0.01)
+    quantity = serializers.DecimalField(max_digits=12, decimal_places=2, min_value=Decimal('0.01'))
     batch_number = serializers.CharField(required=False, allow_blank=True)
     manufacturing_date = serializers.DateField(required=False, allow_null=True)
     expiry_date = serializers.DateField(required=False, allow_null=True)

@@ -1,4 +1,5 @@
 # payments/serializers.py
+from decimal import Decimal
 from rest_framework import serializers
 from .models import (
     PaymentAccount, PaymentTransaction, 
@@ -127,7 +128,7 @@ class MpesaStkPushSerializer(serializers.Serializer):
     #Serializer for initiating STK Push
 
  phone_number = serializers.CharField(max_length=15)
- amount = serializers.DecimalField(max_digits=12, decimal_places=2, min_value=1)
+ amount = serializers.DecimalField(max_digits=12, decimal_places=2, min_value=Decimal('1'))
  account_reference = serializers.CharField(max_length=50)
  transaction_desc = serializers.CharField(max_length=100, required=False, default="Payment for goods")
  sale_id = serializers.IntegerField(required=False)

@@ -8,22 +8,6 @@ from datetime import datetime
 
 from products.models import Product, Category
 
-
-from django.db import models
-
-
-class ImportJob(models.Model):
-    file_name = models.CharField(max_length=255)
-    status = models.CharField(
-        max_length=50,
-        default="pending"
-    )
-    created_at = models.DateTimeField(
-        auto_now_add=True
-    )
-
-    def __str__(self):
-        return self.file_name
 # SUPPLIER MODEL (MOVED FROM PRODUCTS)
 
 class Supplier(models.Model):

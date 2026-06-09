@@ -1,12 +1,13 @@
 from django.test import TestCase
-# customers/tests.py
-from django.test import TestCase
 from django.core.exceptions import ValidationError
-from django.contrib.auth.models import User
+from django.contrib.auth import get_user_model
+from django.db import IntegrityError
 from rest_framework.test import APIClient
 from rest_framework import status
 from decimal import Decimal
 from .models import Customer
+
+User = get_user_model()
 
 class CustomerModelTest(TestCase):
     """Test Customer model functionality"""
@@ -45,15 +46,12 @@ class CustomerModelTest(TestCase):
         """Test phone numbers must be unique"""
         Customer.objects.create(**self.customer_data)
         
-        duplicate = Customer.objects.create(
-            name='Jane Doe',
-            phone='0712345678',  # Same phone
-            email='jane@example.com'
-        )
-        
-        # Should raise integrity error
-        with self.assertRaises(Exception):
-            duplicate.full_clean()
+        with self.assertRaises(IntegrityError):
+            Customer.objects.create(
+                name='Jane Doe',
+                phone='0712345678',
+                email='jane@example.com'
+            )
     
     def test_update_spending(self):
         """Test updating customer spending and loyalty points"""
