@@ -7,6 +7,8 @@ from .models import Sale, SaleItem, Payment, Receipt
 from customers.models import Customer
 from users.models import User
 from products.models import Product
+from inventory.models import InventoryAlert, StockMovement, StoreStock
+from notifications.utils import create_role_notifications
 
 
 class SaleItemSerializer(serializers.ModelSerializer):
@@ -68,6 +70,9 @@ class SaleSerializer(serializers.ModelSerializer):
     receipt = ReceiptSerializer(read_only=True)
     
     customer_name = serializers.SerializerMethodField()
+    customer_phone = serializers.SerializerMethodField()
+    customer_email = serializers.SerializerMethodField()
+    customer_account_reference = serializers.SerializerMethodField()
     cashier_name = serializers.SerializerMethodField()
     
     cart_items = serializers.ListField(
@@ -76,19 +81,26 @@ class SaleSerializer(serializers.ModelSerializer):
         child=serializers.DictField(),
         help_text="List of {product_id, quantity, discount_percentage}"
     )
+    payment_inputs = serializers.ListField(
+        write_only=True,
+        required=False,
+        child=serializers.DictField(),
+        help_text="List of {payment_method, amount, reference_number}"
+    )
     
     class Meta:
         model = Sale
         fields = [
             'id', 'uuid', 'sale_id', 'status', 'payment_status',
-            'customer', 'customer_name', 'cashier', 'cashier_name',
+            'customer', 'customer_name', 'customer_phone', 'customer_email',
+            'customer_account_reference', 'cashier', 'cashier_name',
             'voided_by', 'void_reason', 'voided_at',
             'subtotal', 'discount_amount', 'discount_percentage',
             'tax_amount', 'tax_rate', 'total', 'amount_paid', 'change_due',
             'loyalty_points_earned', 'loyalty_points_redeemed', 'loyalty_discount',
             'notes', 'sale_date', 'updated_at',
             'items', 'payments', 'receipt',
-            'cart_items'
+            'cart_items', 'payment_inputs'
         ]
         read_only_fields = [
             'id', 'uuid', 'sale_id', 'sale_date', 'updated_at',
@@ -98,6 +110,15 @@ class SaleSerializer(serializers.ModelSerializer):
     
     def get_customer_name(self, obj):
         return obj.customer.name if obj.customer else 'Walk-in Customer'
+
+    def get_customer_phone(self, obj):
+        return obj.customer.phone if obj.customer else ''
+
+    def get_customer_email(self, obj):
+        return obj.customer.email if obj.customer else ''
+
+    def get_customer_account_reference(self, obj):
+        return obj.customer.account_reference if obj.customer else ''
     
     def get_cashier_name(self, obj):
         return obj.cashier.get_full_name() or obj.cashier.username
@@ -125,10 +146,65 @@ class SaleSerializer(serializers.ModelSerializer):
                 raise serializers.ValidationError(f"Product with id {item['product_id']} does not exist")
         
         return value
-    
+
+    def _sync_inventory_after_sale(self, product, quantity, stock_before, sale, cashier):
+        store_stock, _ = StoreStock.objects.update_or_create(
+            store='Main Warehouse',
+            product=product,
+            defaults={
+                'quantity': product.stock_quantity,
+                'reorder_level': product.reorder_level,
+            },
+        )
+
+        StockMovement.objects.create(
+            product=product,
+            movement_type='sale',
+            quantity=quantity,
+            stock_before=stock_before,
+            stock_after=product.stock_quantity,
+            unit_cost=product.cost_price,
+            unit_price=product.retail_price,
+            reference_id=sale.sale_id,
+            reference_type='Sale',
+            reason=f'Sale {sale.sale_id}',
+            recorded_by=cashier,
+            location=store_stock.store,
+        )
+
+        if product.reorder_level > 0 and product.stock_quantity <= product.reorder_level:
+            alert_type = 'out_of_stock' if product.stock_quantity == 0 else 'low_stock'
+            InventoryAlert.objects.get_or_create(
+                alert_type=alert_type,
+                product=product,
+                store=store_stock.store,
+                is_resolved=False,
+                defaults={
+                    'priority': 'critical' if product.stock_quantity == 0 else 'high',
+                    'message': f'{product.name} stock is {product.stock_quantity}; reorder level is {product.reorder_level}.',
+                    'suggested_action': 'Create a purchase order or adjust stock.',
+                },
+            )
+            create_role_notifications(
+                title='Out of stock warning' if alert_type == 'out_of_stock' else 'Low stock warning',
+                message=f'{product.name} has {product.stock_quantity} remaining after sale {sale.sale_id}. Reorder level is {product.reorder_level}.',
+                priority='critical' if alert_type == 'out_of_stock' else 'high',
+                related_product=product,
+                related_sale=sale,
+                metadata={'event': alert_type, 'store': store_stock.store},
+            )
+        else:
+            InventoryAlert.objects.filter(
+                product=product,
+                store=store_stock.store,
+                alert_type__in=['low_stock', 'out_of_stock'],
+                is_resolved=False,
+            ).update(is_resolved=True)
+
     @transaction.atomic
     def create(self, validated_data):
         cart_items = validated_data.pop('cart_items', [])
+        payment_inputs = validated_data.pop('payment_inputs', [])
         request = self.context.get('request')
         cashier = request.user if request else None
         
@@ -155,13 +231,51 @@ class SaleSerializer(serializers.ModelSerializer):
                 discount_percentage=discount_percentage
             )
             
+            stock_before = product.stock_quantity
             product.stock_quantity -= quantity
             product.save(update_fields=['stock_quantity'])
+            self._sync_inventory_after_sale(product, quantity, stock_before, sale, cashier)
         
         sale.calculate_totals()
         sale.status = 'completed'
-        sale.save(update_fields=['status'])
-        sale.add_loyalty_points()
+
+        if sale.customer:
+            sale.loyalty_points_earned = int(sale.total / 100)
+            sale.customer.update_spending(sale.total)
+
+        sale.save()
+        if payment_inputs:
+            for payment_data in payment_inputs:
+                Payment.objects.create(
+                    sale=sale,
+                    payment_method=payment_data.get('payment_method', 'cash'),
+                    amount=Decimal(str(payment_data.get('amount', 0))),
+                    reference_number=payment_data.get('reference_number', ''),
+                    mpesa_receipt_number=payment_data.get('mpesa_receipt_number', ''),
+                    mpesa_phone_number=payment_data.get('mpesa_phone_number', ''),
+                    card_transaction_id=payment_data.get('card_transaction_id', ''),
+                    card_last_four=payment_data.get('card_last_four', ''),
+                    notes=payment_data.get('notes', ''),
+                    recorded_by=cashier
+                )
+        else:
+            Payment.objects.create(
+                sale=sale,
+                payment_method='cash',
+                amount=sale.total,
+                notes='Auto-created from POS sale',
+                recorded_by=cashier
+            )
+
+        if sale.total >= Decimal('50000'):
+            create_role_notifications(
+                title='High value sale completed',
+                message=f'Sale {sale.sale_id} was completed for {sale.total}.',
+                roles=['super_admin', 'admin', 'manager'],
+                priority='high',
+                related_sale=sale,
+                metadata={'event': 'high_value_sale'},
+            )
         Receipt.objects.create(sale=sale)
         
         return sale

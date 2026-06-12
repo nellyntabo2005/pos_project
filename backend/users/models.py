@@ -3,6 +3,7 @@ from django.contrib.auth.models import AbstractUser
 from django.db import models
 from django.core.validators import RegexValidator, MinValueValidator
 from django.utils import timezone
+from datetime import timedelta
 import uuid
 
 class User(AbstractUser):
@@ -108,10 +109,56 @@ class User(AbstractUser):
     # assigned_store = models.ForeignKey('stores.Store', null=True, blank=True, on_delete=models.SET_NULL)
     
     # === STATUS ===
+    APPROVAL_STATUS_CHOICES = [
+        ('pending', 'Pending Approval'),
+        ('approved', 'Approved'),
+        ('rejected', 'Rejected'),
+        ('expired', 'Expired'),
+    ]
+
     is_active = models.BooleanField(
         default=True,
         help_text="Inactive users cannot log in"
     )
+
+    approval_status = models.CharField(
+        max_length=20,
+        choices=APPROVAL_STATUS_CHOICES,
+        default='approved',
+        db_index=True,
+        help_text="Controls whether a registered account may log in"
+    )
+
+    approval_requested_at = models.DateTimeField(
+        default=timezone.now,
+        help_text="When the user requested account approval"
+    )
+
+    approval_deadline_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        help_text="Approval must happen before this timestamp"
+    )
+
+    approved_at = models.DateTimeField(null=True, blank=True)
+    approved_by = models.ForeignKey(
+        'self',
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name='approved_users'
+    )
+
+    rejected_at = models.DateTimeField(null=True, blank=True)
+    rejected_by = models.ForeignKey(
+        'self',
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name='rejected_users'
+    )
+
+    approval_notes = models.TextField(blank=True)
     
     is_online = models.BooleanField(
         default=False,
@@ -136,6 +183,8 @@ class User(AbstractUser):
         indexes = [
             models.Index(fields=['role']),
             models.Index(fields=['is_active']),
+            models.Index(fields=['approval_status']),
+            models.Index(fields=['approval_deadline_at']),
             models.Index(fields=['employee_id']),
             models.Index(fields=['phone']),
         ]
@@ -191,6 +240,54 @@ class User(AbstractUser):
         """Update user's last activity timestamp"""
         self.last_activity = timezone.now()
         self.save(update_fields=['last_activity'])
+
+    @property
+    def is_pending_approval(self):
+        return self.approval_status == 'pending'
+
+    @property
+    def has_approval_expired(self):
+        return (
+            self.approval_status == 'pending'
+            and self.approval_deadline_at
+            and timezone.now() > self.approval_deadline_at
+        )
+
+    def mark_pending_approval(self):
+        self.is_active = False
+        self.approval_status = 'pending'
+        self.approval_requested_at = timezone.now()
+        self.approval_deadline_at = self.approval_requested_at + timedelta(hours=24)
+        self.approved_at = None
+        self.approved_by = None
+        self.rejected_at = None
+        self.rejected_by = None
+
+    def approve(self, approved_by):
+        self.is_active = True
+        self.approval_status = 'approved'
+        self.approved_at = timezone.now()
+        self.approved_by = approved_by
+        self.rejected_at = None
+        self.rejected_by = None
+
+    def reject(self, rejected_by, notes=''):
+        self.is_active = False
+        self.is_online = False
+        self.approval_status = 'rejected'
+        self.rejected_at = timezone.now()
+        self.rejected_by = rejected_by
+        if notes:
+            self.approval_notes = notes
+
+    def expire_approval_if_needed(self):
+        if self.has_approval_expired:
+            self.is_active = False
+            self.is_online = False
+            self.approval_status = 'expired'
+            self.save(update_fields=['is_active', 'is_online', 'approval_status'])
+            return True
+        return False
     
     def get_permissions_list(self):
         """Return list of permissions for frontend"""

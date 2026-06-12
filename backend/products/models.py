@@ -58,6 +58,11 @@ class Product(models.Model):
     # Basic info
     name = models.CharField(max_length=200, db_index=True)
     description = models.TextField(blank=True)
+    generic_name = models.CharField(max_length=120, blank=True, db_index=True)
+    brand = models.CharField(max_length=120, blank=True, db_index=True)
+    variant = models.CharField(max_length=120, blank=True)
+    pack_size = models.CharField(max_length=80, blank=True)
+    model_number = models.CharField(max_length=80, blank=True)
     
     # Category (still in products)
     category = models.ForeignKey(Category, on_delete=models.SET_NULL, null=True, blank=True, related_name='products')
@@ -120,6 +125,8 @@ class Product(models.Model):
             models.Index(fields=['sku']),
             models.Index(fields=['barcode']),
             models.Index(fields=['name']),
+            models.Index(fields=['generic_name']),
+            models.Index(fields=['brand']),
             models.Index(fields=['category']),
             models.Index(fields=['supplier']),
             models.Index(fields=['is_active']),

@@ -23,13 +23,22 @@ class SupplierSerializer(serializers.ModelSerializer):
     class Meta:
         model = Supplier
         fields = [
-            'id', 'name', 'code', 'contact_person', 'phone', 'email',
-            'website', 'address', 'address_line1', 'address_line2', 'city', 'county',
-            'postal_code', 'tax_number', 'bank_name', 'bank_account',
-            'is_active', 'is_preferred', 'payment_terms', 'notes',
+            'id', 'name', 'code', 'contact_person', 'designation', 'phone',
+            'alternate_phone', 'fax_number', 'email', 'website', 'supplier_type',
+            'supplier_category', 'registration_number', 'address', 'address_line1',
+            'address_line2', 'city', 'county', 'postal_code', 'country',
+            'tax_number', 'bank_name', 'bank_account', 'currency', 'credit_limit',
+            'preferred_payment_method', 'mpesa_paybill', 'mpesa_till',
+            'default_warehouse', 'minimum_order_amount', 'lead_time_days',
+            'uploaded_documents', 'is_active', 'is_preferred', 'payment_terms', 'notes',
             'created_at', 'updated_at'
         ]
-        read_only_fields = ['id', 'code', 'created_at', 'updated_at']
+        read_only_fields = ['id', 'created_at', 'updated_at']
+
+    def validate_website(self, value):
+        if value and not value.startswith(('http://', 'https://')):
+            return f'https://{value}'
+        return value
 
 class BatchSerializer(serializers.ModelSerializer):
     """

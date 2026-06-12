@@ -5,4 +5,4 @@ class IsAdmin(BasePermission):
 
     def has_permission(self, request, view):
 
-        return request.user.role == "admin"
+        return request.user.role in ["super_admin", "admin"]

@@ -27,6 +27,11 @@ from .serializers import (
 PRODUCT_IMPORT_COLUMNS = [
     'sku',
     'name',
+    'generic_name',
+    'brand',
+    'variant',
+    'pack_size',
+    'model_number',
     'category',
     'supplier',
     'cost_price',
@@ -141,7 +146,12 @@ class ProductViewSet(viewsets.ModelViewSet):
         """Return an Excel template for product bulk import."""
         df = pd.DataFrame([{
             'sku': 'ITEM-001',
-            'name': 'Example Product',
+            'name': 'Brookside Milk 500ml',
+            'generic_name': 'Milk',
+            'brand': 'Brookside',
+            'variant': 'Whole milk',
+            'pack_size': '500ml',
+            'model_number': '',
             'category': 'Beverages',
             'supplier': '',
             'cost_price': 50,
@@ -187,8 +197,15 @@ class ProductViewSet(viewsets.ModelViewSet):
             for idx, row in df.iterrows():
                 try:
                     name = clean_text(read_cell(row, 'name', 'product_name', 'item_name'))
+                    generic_name = clean_text(read_cell(row, 'generic_name', 'parent_product', 'base_product'))
+                    brand = clean_text(read_cell(row, 'brand', 'manufacturer'))
+                    variant = clean_text(read_cell(row, 'variant', 'variation', 'flavour', 'flavor'))
+                    pack_size = clean_text(read_cell(row, 'pack_size', 'size', 'package_size'))
+                    model_number = clean_text(read_cell(row, 'model_number', 'model', 'part_number'))
                     if not name:
-                        errors.append({'row': idx + 2, 'message': 'Name required'})
+                        name = ' '.join(part for part in [brand, generic_name, variant, pack_size] if part)
+                    if not name:
+                        errors.append({'row': idx + 2, 'message': 'Name or brand/generic product details required'})
                         continue
 
                     category = get_or_create_category(read_cell(row, 'category', 'category_name'))
@@ -212,6 +229,13 @@ class ProductViewSet(viewsets.ModelViewSet):
                         product = Product.objects.filter(
                             Q(sku=sku_or_barcode) | Q(barcode=sku_or_barcode)
                         ).first()
+                    if product is None and brand and generic_name:
+                        product = Product.objects.filter(
+                            brand__iexact=brand,
+                            generic_name__iexact=generic_name,
+                            variant__iexact=variant,
+                            pack_size__iexact=pack_size,
+                        ).first()
                     if product is None:
                         product = Product.objects.filter(name=name).first()
 
@@ -220,6 +244,11 @@ class ProductViewSet(viewsets.ModelViewSet):
                         product = Product()
 
                     product.name = name
+                    product.generic_name = generic_name
+                    product.brand = brand
+                    product.variant = variant
+                    product.pack_size = pack_size
+                    product.model_number = model_number
                     if sku_or_barcode and (is_new or product.barcode != sku_or_barcode):
                         product.barcode = sku_or_barcode
                     elif is_new and not product.barcode:
@@ -263,6 +292,11 @@ class ProductViewSet(viewsets.ModelViewSet):
                 'sku': p.barcode or p.sku,
                 'system_sku': p.sku,
                 'name': p.name,
+                'generic_name': p.generic_name,
+                'brand': p.brand,
+                'variant': p.variant,
+                'pack_size': p.pack_size,
+                'model_number': p.model_number,
                 'category': p.category.name if p.category else '',
                 'supplier': p.supplier.name if p.supplier else '',
                 'cost_price': float(p.cost_price),

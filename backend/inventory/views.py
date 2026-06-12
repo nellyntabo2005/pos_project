@@ -8,6 +8,7 @@ from django_filters.rest_framework import DjangoFilterBackend
 from django.db.models import Q, Sum, F, Avg, Count, Case, When, IntegerField
 from django.utils import timezone
 from django.shortcuts import get_object_or_404
+from django.core.exceptions import ValidationError
 from decimal import Decimal
 import pandas as pd
 
@@ -269,11 +270,15 @@ class PurchaseOrderViewSet(viewsets.ModelViewSet):
         if not serializer.is_valid():
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
         
-        po.receive_items(request.user, serializer.validated_data)
+        try:
+            po.receive_items(request.user, serializer.validated_data)
+        except ValidationError as error:
+            return Response({'error': str(error)}, status=status.HTTP_400_BAD_REQUEST)
         
         return Response({
             'message': 'Items received successfully',
-            'status': po.status
+            'status': po.status,
+            'purchase_order': self.get_serializer(po).data
         })
     
     @action(detail=True, methods=['post'], url_path='cancel')

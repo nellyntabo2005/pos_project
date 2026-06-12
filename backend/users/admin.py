@@ -17,6 +17,8 @@ class CustomUserAdmin(UserAdmin):
         'role_badge',
         'phone',
         'employee_id',
+        'approval_status',
+        'approval_deadline_at',
         'is_active',
         'is_online_badge',
         'last_activity',
@@ -26,6 +28,7 @@ class CustomUserAdmin(UserAdmin):
     list_filter = [
         'role',
         'is_active',
+        'approval_status',
         'is_online',
         'employment_type',
         'date_joined',
@@ -50,6 +53,12 @@ class CustomUserAdmin(UserAdmin):
         'date_joined',
         'created_at',
         'updated_at',
+        'approval_requested_at',
+        'approval_deadline_at',
+        'approved_at',
+        'approved_by',
+        'rejected_at',
+        'rejected_by',
         'get_commission_info',
     ]
     
@@ -66,6 +75,18 @@ class CustomUserAdmin(UserAdmin):
         }),
         ('Status', {
             'fields': ('is_active', 'is_online', 'last_login', 'last_login_ip', 'last_activity')
+        }),
+        ('Approval', {
+            'fields': (
+                'approval_status',
+                'approval_requested_at',
+                'approval_deadline_at',
+                'approved_at',
+                'approved_by',
+                'rejected_at',
+                'rejected_by',
+                'approval_notes',
+            )
         }),
         ('Notes', {
             'fields': ('notes',),
@@ -86,7 +107,7 @@ class CustomUserAdmin(UserAdmin):
     )
     
     # Actions
-    actions = ['activate_users', 'deactivate_users', 'make_cashier', 'make_manager']
+    actions = ['approve_users', 'reject_users', 'activate_users', 'deactivate_users', 'make_cashier', 'make_manager']
     
     def full_name(self, obj):
         return obj.get_full_name() or obj.username
@@ -112,8 +133,8 @@ class CustomUserAdmin(UserAdmin):
     
     def is_online_badge(self, obj):
         if obj.is_online:
-            return format_html('<span style="color: green;">● Online</span>')
-        return format_html('<span style="color: gray;">○ Offline</span>')
+            return 'Online'
+        return 'Offline'
     is_online_badge.short_description = 'Status'
     
     def get_commission_info(self, obj):
@@ -129,6 +150,44 @@ class CustomUserAdmin(UserAdmin):
         updated = queryset.update(is_active=True)
         self.message_user(request, f'{updated} users activated.')
     activate_users.short_description = 'Activate selected users'
+
+    def approve_users(self, request, queryset):
+        updated = 0
+        for user in queryset:
+            if user.id == request.user.id:
+                continue
+            if user.expire_approval_if_needed():
+                continue
+            user.approve(request.user)
+            user.save(update_fields=[
+                'is_active',
+                'approval_status',
+                'approved_at',
+                'approved_by',
+                'rejected_at',
+                'rejected_by',
+            ])
+            updated += 1
+        self.message_user(request, f'{updated} users approved.')
+    approve_users.short_description = 'Approve selected users'
+
+    def reject_users(self, request, queryset):
+        updated = 0
+        for user in queryset:
+            if user.id == request.user.id:
+                continue
+            user.reject(request.user)
+            user.save(update_fields=[
+                'is_active',
+                'is_online',
+                'approval_status',
+                'rejected_at',
+                'rejected_by',
+                'approval_notes',
+            ])
+            updated += 1
+        self.message_user(request, f'{updated} users rejected.')
+    reject_users.short_description = 'Reject selected users'
     
     def deactivate_users(self, request, queryset):
         updated = queryset.update(is_active=False, is_online=False)

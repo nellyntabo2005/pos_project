@@ -151,7 +151,7 @@ class NotificationViewSet(viewsets.ReadOnlyModelViewSet):
         """Mark notification as read"""
         notification = self.get_object()
         notification.mark_as_read()
-        return Response({'message': 'Marked as read'})
+        return Response({'success': True, 'message': 'Marked as read'})
     
     @action(detail=False, methods=['post'], url_path='mark-all-read')
     def mark_all_read(self, request):
@@ -160,7 +160,7 @@ class NotificationViewSet(viewsets.ReadOnlyModelViewSet):
             status='read',
             read_at=timezone.now()
         )
-        return Response({'message': 'All notifications marked as read'})
+        return Response({'success': True, 'message': 'All notifications marked as read'})
     
     @action(detail=False, methods=['get'], url_path='unread-count')
     def unread_count(self, request):

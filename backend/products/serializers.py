@@ -7,7 +7,8 @@ from django.utils.text import slugify
 from rest_framework import serializers
 from decimal import Decimal
 from .models import Category, Product, ProductImage
-from inventory.models import Supplier
+from inventory.models import InventoryAlert, StockMovement, StoreStock, Supplier
+from notifications.utils import create_role_notifications
 
 
 
@@ -42,13 +43,22 @@ class SupplierSerializer(serializers.ModelSerializer):
     class Meta:
         model = Supplier
         fields = [
-            'id', 'name', 'code', 'contact_person', 'phone', 'email',
-            'website', 'address', 'address_line1', 'address_line2', 'city', 'county',
-            'postal_code', 'tax_number', 'bank_name', 'bank_account',
-            'is_active', 'is_preferred', 'payment_terms', 'notes',
+            'id', 'name', 'code', 'contact_person', 'designation', 'phone',
+            'alternate_phone', 'fax_number', 'email', 'website', 'supplier_type',
+            'supplier_category', 'registration_number', 'address', 'address_line1',
+            'address_line2', 'city', 'county', 'postal_code', 'country',
+            'tax_number', 'bank_name', 'bank_account', 'currency', 'credit_limit',
+            'preferred_payment_method', 'mpesa_paybill', 'mpesa_till',
+            'default_warehouse', 'minimum_order_amount', 'lead_time_days',
+            'uploaded_documents', 'is_active', 'is_preferred', 'payment_terms', 'notes',
             'created_at', 'updated_at'
         ]
-        read_only_fields = ['id', 'code', 'created_at', 'updated_at']
+        read_only_fields = ['id', 'created_at', 'updated_at']
+
+    def validate_website(self, value):
+        if value and not value.startswith(('http://', 'https://')):
+            return f'https://{value}'
+        return value
 
 
 class ProductImageSerializer(serializers.ModelSerializer):
@@ -81,6 +91,7 @@ class ProductSerializer(serializers.ModelSerializer):
         model = Product
         fields = [
             'id', 'uuid', 'sku', 'barcode', 'name', 'description',
+            'generic_name', 'brand', 'variant', 'pack_size', 'model_number',
             'category', 'category_name', 'supplier', 'supplier_name', 'supplier_sku',
             'cost_price', 'retail_price', 'wholesale_price', 'carton_price', 'carton_quantity',
             'stock_quantity', 'reorder_level', 'reorder_quantity', 'minimum_stock', 'maximum_stock',
@@ -152,18 +163,98 @@ class ProductSerializer(serializers.ModelSerializer):
         instance.external_image_url = ''
         instance.main_image.save(image_file.name, image_file, save=True)
 
+    def _sync_inventory_records(self, instance, previous_stock=None):
+        store_stock, _ = StoreStock.objects.update_or_create(
+            store='Main Warehouse',
+            product=instance,
+            defaults={
+                'quantity': instance.stock_quantity,
+                'reorder_level': instance.reorder_level,
+            },
+        )
+
+        request = self.context.get('request')
+        user = getattr(request, 'user', None)
+        if not user or not user.is_authenticated:
+            return
+
+        current_stock = Decimal(str(instance.stock_quantity or 0))
+        previous_stock = Decimal(str(previous_stock if previous_stock is not None else 0))
+        stock_changed = current_stock != previous_stock
+
+        if stock_changed:
+            movement_type = 'adjustment' if previous_stock else 'purchase'
+            reason = 'Product stock updated from frontend'
+            if previous_stock == 0 and current_stock > 0:
+                reason = 'Opening stock from frontend'
+
+            StockMovement.objects.create(
+                product=instance,
+                movement_type=movement_type,
+                quantity=abs(current_stock - previous_stock),
+                stock_before=previous_stock,
+                stock_after=current_stock,
+                unit_cost=instance.cost_price,
+                reference_id=f'product-{instance.pk}',
+                reference_type='Product',
+                reason=reason,
+                recorded_by=user,
+                location=store_stock.store,
+            )
+
+            if previous_stock == 0 and current_stock > 0:
+                create_role_notifications(
+                    title='Inventory item added',
+                    message=f'{instance.name} was added with opening stock of {current_stock}.',
+                    priority='medium',
+                    related_product=instance,
+                    metadata={'event': 'opening_stock'},
+                )
+
+        if instance.reorder_level > 0 and instance.stock_quantity <= instance.reorder_level:
+            alert_type = 'out_of_stock' if instance.stock_quantity == 0 else 'low_stock'
+            priority = 'critical' if instance.stock_quantity == 0 else 'high'
+            InventoryAlert.objects.get_or_create(
+                alert_type=alert_type,
+                product=instance,
+                store=store_stock.store,
+                is_resolved=False,
+                defaults={
+                    'priority': priority,
+                    'message': f'{instance.name} stock is {instance.stock_quantity}; reorder level is {instance.reorder_level}.',
+                    'suggested_action': 'Create a purchase order or adjust stock.',
+                },
+            )
+            create_role_notifications(
+                title='Out of stock warning' if alert_type == 'out_of_stock' else 'Low stock warning',
+                message=f'{instance.name} has {instance.stock_quantity} remaining. Reorder level is {instance.reorder_level}.',
+                priority=priority,
+                related_product=instance,
+                metadata={'event': alert_type, 'store': store_stock.store},
+            )
+        else:
+            InventoryAlert.objects.filter(
+                product=instance,
+                store=store_stock.store,
+                alert_type__in=['low_stock', 'out_of_stock'],
+                is_resolved=False,
+            ).update(is_resolved=True)
+
     def create(self, validated_data):
         image_data = validated_data.pop('image_data', '')
         self._apply_category_name(validated_data)
         instance = super().create(validated_data)
         self._apply_image_data(instance, image_data)
+        self._sync_inventory_records(instance, previous_stock=0)
         return instance
 
     def update(self, instance, validated_data):
         image_data = validated_data.pop('image_data', '')
+        previous_stock = instance.stock_quantity
         self._apply_category_name(validated_data)
         instance = super().update(instance, validated_data)
         self._apply_image_data(instance, image_data)
+        self._sync_inventory_records(instance, previous_stock=previous_stock)
         return instance
 
 

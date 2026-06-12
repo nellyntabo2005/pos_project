@@ -43,6 +43,14 @@ class UserSerializer(serializers.ModelSerializer):
             'commission_rate',
             'default_shift',
             'is_active',
+            'approval_status',
+            'approval_requested_at',
+            'approval_deadline_at',
+            'approved_at',
+            'approved_by',
+            'rejected_at',
+            'rejected_by',
+            'approval_notes',
             'is_online',
             'date_joined',
             'last_login',
@@ -53,7 +61,9 @@ class UserSerializer(serializers.ModelSerializer):
             'permissions',
         ]
         read_only_fields = ['id', 'uuid', 'employee_id', 'date_joined', 'created_at', 
-                           'updated_at', 'is_online', 'last_login', 'last_activity']
+                           'updated_at', 'is_online', 'last_login', 'last_activity',
+                           'approval_status', 'approval_requested_at', 'approval_deadline_at',
+                           'approved_at', 'approved_by', 'rejected_at', 'rejected_by']
         extra_kwargs = {
             'username': {'required': True},
             'email': {'required': True},
@@ -188,3 +198,7 @@ class UserRoleUpdateSerializer(serializers.ModelSerializer):
         model = User
         fields = ['id', 'username', 'role', 'is_active']
         read_only_fields = ['id', 'username']
+
+
+class UserApprovalSerializer(serializers.Serializer):
+    notes = serializers.CharField(required=False, allow_blank=True)

@@ -67,6 +67,9 @@ class NotificationRuleSerializer(serializers.ModelSerializer):
 
 class NotificationSerializer(serializers.ModelSerializer):
     channel_name = serializers.SerializerMethodField()
+    severity = serializers.SerializerMethodField()
+    is_read = serializers.SerializerMethodField()
+    action_url = serializers.SerializerMethodField()
     priority_display = serializers.SerializerMethodField()
     status_display = serializers.SerializerMethodField()
     recipient_display = serializers.SerializerMethodField()
@@ -76,7 +79,8 @@ class NotificationSerializer(serializers.ModelSerializer):
         fields = [
             'id', 'notification_id', 'title', 'message', 'channel',
             'channel_name', 'priority', 'priority_display', 'status',
-            'status_display', 'recipient_user', 'recipient_email',
+            'status_display', 'severity', 'is_read', 'action_url',
+            'recipient_user', 'recipient_email',
             'recipient_phone', 'recipient_display', 'related_product',
             'related_sale', 'error_message', 'sent_at', 'read_at',
             'created_at'
@@ -87,6 +91,24 @@ class NotificationSerializer(serializers.ModelSerializer):
     
     def get_channel_name(self, obj):
         return obj.channel.name
+
+    def get_severity(self, obj):
+        return {
+            'low': 'info',
+            'medium': 'info',
+            'high': 'warning',
+            'critical': 'error',
+        }.get(obj.priority, 'info')
+
+    def get_is_read(self, obj):
+        return obj.status == 'read' or obj.read_at is not None
+
+    def get_action_url(self, obj):
+        if obj.related_product_id:
+            return '/inventory'
+        if obj.related_sale_id:
+            return '/sales'
+        return ''
     
     def get_priority_display(self, obj):
         return obj.get_priority_display()

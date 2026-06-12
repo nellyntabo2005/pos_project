@@ -1,10 +1,11 @@
 # inventory/models.py
-from django.db import models
+from django.db import models, transaction
 from django.core.validators import MinValueValidator
 from django.core.exceptions import ValidationError
 from decimal import Decimal
 import uuid
 from datetime import datetime
+from django.utils import timezone
 
 from products.models import Product, Category
 
@@ -16,9 +17,15 @@ class Supplier(models.Model):
     name = models.CharField(max_length=200, db_index=True)
     code = models.CharField(max_length=20, unique=True, blank=True)
     contact_person = models.CharField(max_length=100, blank=True)
+    designation = models.CharField(max_length=100, blank=True)
     phone = models.CharField(max_length=20, db_index=True)
+    alternate_phone = models.CharField(max_length=20, blank=True)
+    fax_number = models.CharField(max_length=30, blank=True)
     email = models.EmailField(blank=True)
     website = models.URLField(blank=True)
+    supplier_type = models.CharField(max_length=50, blank=True)
+    supplier_category = models.CharField(max_length=100, blank=True)
+    registration_number = models.CharField(max_length=100, blank=True)
     
     # Address
     address_line1 = models.CharField(max_length=255, blank=True)
@@ -26,6 +33,7 @@ class Supplier(models.Model):
     city = models.CharField(max_length=100, blank=True)
     county = models.CharField(max_length=100, blank=True)
     postal_code = models.CharField(max_length=20, blank=True)
+    country = models.CharField(max_length=100, blank=True, default='Kenya')
     
     # Tax info
     tax_number = models.CharField(max_length=50, blank=True)
@@ -33,6 +41,15 @@ class Supplier(models.Model):
     # Bank details
     bank_name = models.CharField(max_length=100, blank=True)
     bank_account = models.CharField(max_length=50, blank=True)
+    currency = models.CharField(max_length=10, blank=True, default='KES')
+    credit_limit = models.DecimalField(max_digits=15, decimal_places=2, default=0)
+    preferred_payment_method = models.CharField(max_length=50, blank=True)
+    mpesa_paybill = models.CharField(max_length=30, blank=True)
+    mpesa_till = models.CharField(max_length=30, blank=True)
+    default_warehouse = models.CharField(max_length=100, blank=True)
+    minimum_order_amount = models.DecimalField(max_digits=15, decimal_places=2, default=0)
+    lead_time_days = models.PositiveIntegerField(default=0)
+    uploaded_documents = models.JSONField(default=list, blank=True)
     
     # Status
     is_active = models.BooleanField(default=True)
@@ -293,6 +310,74 @@ class PurchaseOrder(models.Model):
         self.save(update_fields=['subtotal', 'tax_amount', 'total'])
         return self.total
 
+    def submit(self):
+        self.status = 'submitted'
+        self.save(update_fields=['status', 'updated_at'])
+
+    def approve(self, user):
+        self.status = 'confirmed'
+        self.approved_by = user
+        self.approved_at = timezone.now()
+        self.save(update_fields=['status', 'approved_by', 'approved_at', 'updated_at'])
+
+    def receive_items(self, user, received_items):
+        for received_item in received_items:
+            item = self.items.select_related('product').get(id=received_item['item_id'])
+            quantity = Decimal(str(received_item['quantity']))
+            remaining = item.remaining_to_receive
+            if quantity > remaining:
+                raise ValidationError(f"Cannot receive {quantity} for {item.product.name}. Remaining: {remaining}")
+
+            product = item.product
+            stock_before = product.stock_quantity
+            product.stock_quantity = stock_before + quantity
+            product.save(update_fields=['stock_quantity', 'updated_at'])
+
+            item.quantity_received += quantity
+            item.save(update_fields=['quantity_received'])
+
+            batch = None
+            batch_number = received_item.get('batch_number') or ''
+            if batch_number:
+                batch, _ = Batch.objects.get_or_create(
+                    batch_number=batch_number,
+                    defaults={
+                        'product': product,
+                        'quantity': quantity,
+                        'remaining_quantity': quantity,
+                        'manufacturing_date': received_item.get('manufacturing_date'),
+                        'expiry_date': received_item.get('expiry_date'),
+                        'purchase_order': self,
+                        'purchase_price': item.unit_cost,
+                        'supplier': self.supplier,
+                        'location': received_item.get('location', 'Main Store'),
+                        'notes': received_item.get('notes', ''),
+                    }
+                )
+
+            StockMovement.objects.create(
+                product=product,
+                batch=batch,
+                movement_type='purchase',
+                quantity=quantity,
+                stock_before=stock_before,
+                stock_after=product.stock_quantity,
+                unit_cost=item.unit_cost,
+                reference_id=self.po_number,
+                reference_type='purchase_order',
+                reason='Goods received from supplier',
+                notes=received_item.get('notes', ''),
+                recorded_by=user,
+                location=received_item.get('location', 'Main Store'),
+            )
+
+        if all(item.remaining_to_receive <= 0 for item in self.items.all()):
+            self.status = 'completed'
+        else:
+            self.status = 'received'
+        self.delivery_date = timezone.now()
+        self.save(update_fields=['status', 'delivery_date', 'updated_at'])
+
 
 class PurchaseOrderItem(models.Model):
     purchase_order = models.ForeignKey(PurchaseOrder, on_delete=models.CASCADE, related_name='items')
@@ -320,6 +405,10 @@ class PurchaseOrderItem(models.Model):
     
     def __str__(self):
         return f"{self.product.name} - {self.quantity}"
+
+    @property
+    def remaining_to_receive(self):
+        return max(self.quantity - self.quantity_received, Decimal('0'))
 
 
 # ============================================================
@@ -373,6 +462,65 @@ class StockCount(models.Model):
             
             self.count_number = f"SC-{date_str}-{new_num:04d}"
         super().save(*args, **kwargs)
+
+    @transaction.atomic
+    def start_count(self):
+        if not self.items.exists():
+            products = Product.objects.filter(is_active=True)
+            StockCountItem.objects.bulk_create([
+                StockCountItem(
+                    stock_count=self,
+                    product=product,
+                    expected_quantity=product.stock_quantity,
+                    counted_quantity=product.stock_quantity,
+                )
+                for product in products
+            ])
+
+        self.total_products = self.items.count()
+        self.status = 'in_progress'
+        self.save(update_fields=['total_products', 'status'])
+
+    @transaction.atomic
+    def complete_count(self, user):
+        discrepancies = self.items.filter(is_discrepancy=True).select_related('product')
+        total_adjustment_value = Decimal('0')
+
+        for item in discrepancies:
+            product = item.product
+            old_stock = product.stock_quantity
+            product.stock_quantity = item.counted_quantity
+            product.save(update_fields=['stock_quantity'])
+
+            adjustment_quantity = abs(item.difference)
+            total_adjustment_value += abs(item.difference * product.cost_price)
+
+            if adjustment_quantity > 0:
+                StockMovement.objects.create(
+                    product=product,
+                    movement_type='count',
+                    quantity=adjustment_quantity,
+                    stock_before=old_stock,
+                    stock_after=product.stock_quantity,
+                    unit_cost=product.cost_price,
+                    reference_id=self.count_number,
+                    reference_type='StockCount',
+                    reason='Physical stock count adjustment',
+                    notes=item.notes,
+                    recorded_by=user,
+                    location=self.location,
+                )
+
+        self.total_products = self.items.count()
+        self.total_discrepancies = discrepancies.count()
+        self.total_adjustment_value = total_adjustment_value
+        self.status = 'completed'
+        self.completed_by = user
+        self.completed_at = timezone.now()
+        self.save(update_fields=[
+            'total_products', 'total_discrepancies', 'total_adjustment_value',
+            'status', 'completed_by', 'completed_at'
+        ])
 
 
 class StockCountItem(models.Model):
@@ -456,6 +604,21 @@ class StoreTransfer(models.Model):
             self.transfer_number = f"TRF-{date_str}-{new_num:04d}"
         super().save(*args, **kwargs)
 
+    def approve_transfer(self, user):
+        self.status = 'approved'
+        self.approved_by = user
+        self.save(update_fields=['status', 'approved_by', 'updated_at'])
+
+    def send_transfer(self):
+        self.status = 'in_transit'
+        self.save(update_fields=['status', 'updated_at'])
+
+    def receive_transfer(self, user):
+        self.status = 'received'
+        self.received_by = user
+        self.received_date = timezone.now()
+        self.save(update_fields=['status', 'received_by', 'received_date', 'updated_at'])
+
 
 class StoreTransferItem(models.Model):
     transfer = models.ForeignKey(StoreTransfer, on_delete=models.CASCADE, related_name='items')
@@ -482,6 +645,10 @@ class StoreStock(models.Model):
     
     def __str__(self):
         return f"{self.store} - {self.product.name}: {self.quantity}"
+
+    @property
+    def is_low_stock(self):
+        return self.reorder_level > 0 and self.quantity <= self.reorder_level
 
 
 class ImportJob(models.Model):
@@ -569,3 +736,10 @@ class InventoryAlert(models.Model):
     
     def __str__(self):
         return f"{self.get_alert_type_display()} - {self.product.name if self.product else 'General'}"
+
+    def resolve(self, user, notes=''):
+        self.is_resolved = True
+        self.resolved_by = user
+        self.resolved_at = timezone.now()
+        self.resolution_notes = notes
+        self.save(update_fields=['is_resolved', 'resolved_by', 'resolved_at', 'resolution_notes'])

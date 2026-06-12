@@ -160,8 +160,34 @@ class Sale(models.Model):
     def void_sale(self, voided_by_user, reason):
         if self.status == 'completed':
             for item in self.items.all():
+                from inventory.models import StockMovement, StoreStock
+
+                stock_before = item.product.stock_quantity
                 item.product.stock_quantity += item.quantity
                 item.product.save(update_fields=['stock_quantity'])
+
+                store_stock, _ = StoreStock.objects.update_or_create(
+                    store='Main Warehouse',
+                    product=item.product,
+                    defaults={
+                        'quantity': item.product.stock_quantity,
+                        'reorder_level': item.product.reorder_level,
+                    },
+                )
+                StockMovement.objects.create(
+                    product=item.product,
+                    movement_type='return',
+                    quantity=item.quantity,
+                    stock_before=stock_before,
+                    stock_after=item.product.stock_quantity,
+                    unit_cost=item.product.cost_price,
+                    unit_price=item.unit_price,
+                    reference_id=self.sale_id,
+                    reference_type='SaleVoid',
+                    reason=reason or f'Voided sale {self.sale_id}',
+                    recorded_by=voided_by_user,
+                    location=store_stock.store,
+                )
             
             if self.customer and self.loyalty_points_earned > 0:
                 self.customer.loyalty_points -= self.loyalty_points_earned
