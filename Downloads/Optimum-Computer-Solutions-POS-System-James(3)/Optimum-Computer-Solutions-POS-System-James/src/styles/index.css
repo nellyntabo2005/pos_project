@@ -1,0 +1,8 @@
+@import "tailwindcss";
+
+/* Correctly import your local custom stylesheets */
+@import "./default_theme.css";
+@import "./globals.css";
+
+/* Third-party animations or utilities */
+@import "tw-animate-css";
